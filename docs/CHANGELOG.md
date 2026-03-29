@@ -11,6 +11,7 @@
 
 ### 变更
 - [YYYY-MM-DD HH:mm +0800] 在此记录本轮文档结构、流程口径、模板引用路径等调整。
+- [2026-03-29 18:26 +0800] ITER-007：新增独立模拟结果面板（`SimResultPanel.vue`），展示核心指标、资源/经验净变化及基于瓶颈步骤的轻量优化建议；`FlowEditor.vue` 职责收口为编辑与触发。
 - [2026-03-29 18:12 +0800] ITER-006：新增列表式流程编辑器（`FlowEditor.vue`）与流程状态管理（`flowStore.ts`），支持步骤新增/删除、配方选择、执行次数修改与模拟触发。
 - [2026-03-29 17:59 +0800] ITER-005：搭建 Vue 3 + TypeScript + Pinia + Vite 工程骨架；确立 core / stores / components / services 四层分离；现有 core 文件类型检查无报错。
 - [2026-03-29 17:48 +0800] ITER-004：新建 `src/core/upgradeSystem.ts`，实现升级条件校验、升级购买与升级前后收益对比（基于 `simulateFlow()`）。

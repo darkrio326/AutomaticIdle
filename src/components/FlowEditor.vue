@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useFlowStore } from '@/stores/flowStore';
+import SimResultPanel from '@/components/SimResultPanel.vue';
 
 const flowStore = useFlowStore();
 
@@ -50,14 +51,6 @@ function onRepeatInput(uid: number, value: string): void {
       </li>
     </ul>
 
-    <p v-if="flowStore.errorMessage">{{ flowStore.errorMessage }}</p>
-
-    <div v-if="flowStore.result">
-      <h3>模拟结果</h3>
-      <p>总耗时：{{ flowStore.result.totalTime.toFixed(2) }}s</p>
-      <p>总金币：{{ flowStore.result.totalGoldGained }}</p>
-      <p>每秒金币：{{ flowStore.result.goldPerSecond.toFixed(4) }}</p>
-      <p>瓶颈步骤：{{ flowStore.result.bottleneckRecipeId ?? '无' }}</p>
-    </div>
+    <SimResultPanel />
   </section>
 </template>
