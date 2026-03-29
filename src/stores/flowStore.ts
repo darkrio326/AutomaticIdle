@@ -49,6 +49,22 @@ interface UpgradeComparisonView {
   };
 }
 
+function canSubmitOrderRequirements(
+  inventory: Record<string, number>,
+  requirements: Array<{ resourceId: string; amount: number }>,
+): { ok: boolean; reason?: string } {
+  for (const req of requirements) {
+    const current = inventory[req.resourceId] ?? 0;
+    if (current < req.amount) {
+      return {
+        ok: false,
+        reason: `资源不足：${req.resourceId} 需要 ${req.amount}，当前 ${current}`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
 function canApplyResourceDelta(
   inventory: Record<string, number>,
   delta: Record<string, number>,
@@ -118,8 +134,10 @@ export const useFlowStore = defineStore('flow', {
     ] as FlowStepItem[],
     result: null as SimulationResult | null,
     errorMessage: '',
+    orderMessage: '',
     upgradeMessage: '',
     upgradeComparison: null as UpgradeComparisonView | null,
+    completedOrderIds: [] as string[],
     playerState: buildInitialPlayerState(),
     gameConfig: buildGameConfig(),
   }),
@@ -206,6 +224,46 @@ export const useFlowStore = defineStore('flow', {
           timeBonusPercent,
         };
       });
+    },
+    orderItems(state): Array<{
+      id: string;
+      name: string;
+      requirements: OrderConfig['requirements'];
+      rewards: NonNullable<OrderConfig['rewards']>;
+      unlocks: NonNullable<OrderConfig['unlocks']>;
+      completed: boolean;
+      canSubmit: boolean;
+      reason?: string;
+    }> {
+      return Object.values(state.gameConfig.orders)
+        .filter((o) => o.enabled !== false)
+        .map((order) => {
+          const completed = state.completedOrderIds.includes(order.id);
+          if (completed) {
+            return {
+              id: order.id,
+              name: order.name,
+              requirements: order.requirements,
+              rewards: order.rewards ?? [],
+              unlocks: order.unlocks ?? [],
+              completed,
+              canSubmit: false,
+              reason: '订单已完成',
+            };
+          }
+
+          const check = canSubmitOrderRequirements(state.playerState.inventory, order.requirements);
+          return {
+            id: order.id,
+            name: order.name,
+            requirements: order.requirements,
+            rewards: order.rewards ?? [],
+            unlocks: order.unlocks ?? [],
+            completed,
+            canSubmit: check.ok,
+            reason: check.reason,
+          };
+        });
     },
   },
   actions: {
@@ -319,6 +377,45 @@ export const useFlowStore = defineStore('flow', {
       } catch (error) {
         this.upgradeMessage = error instanceof Error ? error.message : '无法完成升级收益对比';
       }
+    },
+    submitOrder(orderId: string): void {
+      this.orderMessage = '';
+
+      if (this.completedOrderIds.includes(orderId)) {
+        this.orderMessage = `订单已完成：${orderId}`;
+        return;
+      }
+
+      const order = this.gameConfig.orders[orderId];
+      if (!order || order.enabled === false) {
+        this.orderMessage = `订单不存在或未启用：${orderId}`;
+        return;
+      }
+
+      const check = canSubmitOrderRequirements(this.playerState.inventory, order.requirements);
+      if (!check.ok) {
+        this.orderMessage = check.reason ?? '资源不足，无法提交订单';
+        return;
+      }
+
+      for (const req of order.requirements) {
+        this.playerState.inventory[req.resourceId] =
+          (this.playerState.inventory[req.resourceId] ?? 0) - req.amount;
+      }
+
+      for (const reward of order.rewards ?? []) {
+        this.playerState.inventory[reward.resourceId] =
+          (this.playerState.inventory[reward.resourceId] ?? 0) + reward.amount;
+      }
+
+      for (const unlock of order.unlocks ?? []) {
+        if (unlock.type === 'recipe' && this.gameConfig.recipes[unlock.id]) {
+          this.gameConfig.recipes[unlock.id].enabled = true;
+        }
+      }
+
+      this.completedOrderIds.push(orderId);
+      this.orderMessage = `订单提交成功：${order.name}`;
     },
   },
 });

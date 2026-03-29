@@ -4,6 +4,7 @@ import { useFlowStore } from '@/stores/flowStore';
 import SimResultPanel from '@/components/SimResultPanel.vue';
 import UpgradePanel from '@/components/UpgradePanel.vue';
 import SkillPanel from '@/components/SkillPanel.vue';
+import OrderPanel from '@/components/OrderPanel.vue';
 
 const flowStore = useFlowStore();
 
@@ -55,6 +56,7 @@ function onRepeatInput(uid: number, value: string): void {
 
     <UpgradePanel />
     <SkillPanel />
+    <OrderPanel />
     <SimResultPanel />
   </section>
 </template>
