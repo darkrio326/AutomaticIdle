@@ -11,6 +11,7 @@ import {
   purchaseUpgrade,
 } from '@/core/upgradeSystem';
 import { applyExpGains, calcRequiredExp } from '@/core/expSystem';
+import { loadSaveSnapshot, saveSnapshot } from '@/services/saveService';
 import type {
   FlowDefinition,
   FlowStep,
@@ -122,25 +123,70 @@ function buildInitialPlayerState(): PlayerState {
 
 let stepUidSeed = 1;
 
-export const useFlowStore = defineStore('flow', {
-  state: () => ({
-    flowName: '默认流程',
-    steps: [
-      {
-        uid: stepUidSeed++,
-        recipeId: 'mine_iron',
-        repeat: 10,
-      },
-    ] as FlowStepItem[],
+function buildInitialState() {
+  const gameConfig = buildGameConfig();
+  const snapshot = loadSaveSnapshot();
+
+  if (!snapshot) {
+    return {
+      flowName: '默认流程',
+      steps: [
+        {
+          uid: stepUidSeed++,
+          recipeId: 'mine_iron',
+          repeat: 10,
+        },
+      ] as FlowStepItem[],
+      result: null as SimulationResult | null,
+      errorMessage: '',
+      orderMessage: '',
+      upgradeMessage: '',
+      upgradeComparison: null as UpgradeComparisonView | null,
+      completedOrderIds: [] as string[],
+      playerState: buildInitialPlayerState(),
+      gameConfig,
+    };
+  }
+
+  for (const recipeId of snapshot.unlockedRecipeIds ?? []) {
+    if (gameConfig.recipes[recipeId]) {
+      gameConfig.recipes[recipeId].enabled = true;
+    }
+  }
+
+  const restoredSteps = snapshot.steps
+    .filter((s) => typeof s.recipeId === 'string' && typeof s.repeat === 'number')
+    .map((s) => ({
+      uid: stepUidSeed++,
+      recipeId: s.recipeId,
+      repeat: Math.max(1, Math.floor(s.repeat)),
+    }));
+
+  return {
+    flowName: snapshot.flowName || '默认流程',
+    steps:
+      restoredSteps.length > 0
+        ? restoredSteps
+        : [
+            {
+              uid: stepUidSeed++,
+              recipeId: 'mine_iron',
+              repeat: 10,
+            },
+          ],
     result: null as SimulationResult | null,
     errorMessage: '',
     orderMessage: '',
     upgradeMessage: '',
     upgradeComparison: null as UpgradeComparisonView | null,
-    completedOrderIds: [] as string[],
-    playerState: buildInitialPlayerState(),
-    gameConfig: buildGameConfig(),
-  }),
+    completedOrderIds: Array.isArray(snapshot.completedOrderIds) ? snapshot.completedOrderIds : [],
+    playerState: snapshot.playerState,
+    gameConfig,
+  };
+}
+
+export const useFlowStore = defineStore('flow', {
+  state: () => buildInitialState(),
   getters: {
     recipeOptions(state): RecipeConfig[] {
       return Object.values(state.gameConfig.recipes).filter((r) => r.enabled !== false);
@@ -267,6 +313,20 @@ export const useFlowStore = defineStore('flow', {
     },
   },
   actions: {
+    persistState(): void {
+      const unlockedRecipeIds = Object.values(this.gameConfig.recipes)
+        .filter((r) => r.enabled !== false)
+        .map((r) => r.id);
+
+      saveSnapshot({
+        version: 1,
+        flowName: this.flowName,
+        steps: this.steps.map((s) => ({ recipeId: s.recipeId, repeat: s.repeat })),
+        playerState: this.playerState,
+        completedOrderIds: [...this.completedOrderIds],
+        unlockedRecipeIds,
+      });
+    },
     addStep(): void {
       const fallbackRecipeId = this.recipeOptions[0]?.id ?? '';
       this.steps.push({
@@ -274,19 +334,23 @@ export const useFlowStore = defineStore('flow', {
         recipeId: fallbackRecipeId,
         repeat: 1,
       });
+      this.persistState();
     },
     removeStep(uid: number): void {
       this.steps = this.steps.filter((s) => s.uid !== uid);
+      this.persistState();
     },
     updateStepRecipe(uid: number, recipeId: string): void {
       const step = this.steps.find((s) => s.uid === uid);
       if (!step) return;
       step.recipeId = recipeId;
+      this.persistState();
     },
     updateStepRepeat(uid: number, repeat: number): void {
       const step = this.steps.find((s) => s.uid === uid);
       if (!step) return;
       step.repeat = Math.max(1, Math.floor(repeat));
+      this.persistState();
     },
     runSimulation(): void {
       this.errorMessage = '';
@@ -331,6 +395,7 @@ export const useFlowStore = defineStore('flow', {
         this.result.expDelta,
         this.gameConfig.skills,
       );
+      this.persistState();
     },
     buyUpgrade(upgradeId: string): void {
       this.upgradeMessage = '';
@@ -343,6 +408,7 @@ export const useFlowStore = defineStore('flow', {
 
       this.playerState = purchaseResult.nextPlayerState;
       this.upgradeMessage = `升级成功：${upgradeId}`;
+      this.persistState();
 
       if (this.result) {
         this.runSimulation();
@@ -416,6 +482,7 @@ export const useFlowStore = defineStore('flow', {
 
       this.completedOrderIds.push(orderId);
       this.orderMessage = `订单提交成功：${order.name}`;
+      this.persistState();
     },
   },
 });

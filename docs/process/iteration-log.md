@@ -46,6 +46,30 @@
 
 ## 迭代记录
 
+### ITER-012 本地存档与恢复
+- 日期：2026-03-30
+- 所属版本：MVP / v0.1
+- 所属阶段：Phase 2
+- 类型：能力增强
+- 目标：完成并验收 IDEA-012，实现本地存档、初始化恢复与基础自动保存。
+- 改动范围：
+  - 新建 `src/services/saveService.ts`
+  - 修改 `src/stores/flowStore.ts`
+- 未改动范围：`src/core/*.ts`、`src/config/*.json`、各组件渲染逻辑
+- 完成内容：
+  - 新增存档服务：`loadSaveSnapshot` / `saveSnapshot` / `clearSaveSnapshot`
+  - 新增 store 初始化恢复：启动时优先加载本地快照，恢复流程与玩家状态
+  - 新增自动保存：步骤编辑、结算、升级购买、订单提交后自动持久化
+  - 持久化范围覆盖：flowName、steps、playerState、completedOrderIds、unlockedRecipeIds
+  - 兼容兜底：存档损坏或版本不匹配时自动回退默认初始状态
+  - 类型检查通过：`saveService.ts`、`flowStore.ts` 无报错
+- 未完成内容：未实现多版本迁移策略与存档导入导出（后续可扩展）
+- 测试情况：手动验证保存路径与恢复路径（刷新后状态可恢复）
+- 风险与注意事项：当前使用 localStorage，容量与跨端同步能力有限；后续若接云端需新增同步策略
+- 回滚方式：回滚上述 2 个文件改动即可
+- 结论：IDEA-012 完成，原型具备可持续试玩基础。
+- 下一步建议：进入 IDEA-013（离线收益基础版）。
+
 ### ITER-011 订单系统轻量版
 - 日期：2026-03-30
 - 所属版本：MVP / v0.1
