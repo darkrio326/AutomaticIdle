@@ -10,6 +10,7 @@ import {
   compareFlowBeforeAfterUpgrade,
   purchaseUpgrade,
 } from '@/core/upgradeSystem';
+import { applyExpGains, calcRequiredExp } from '@/core/expSystem';
 import type {
   FlowDefinition,
   FlowStep,
@@ -167,6 +168,45 @@ export const useFlowStore = defineStore('flow', {
         };
       });
     },
+    skillItems(state): Array<{
+      id: string;
+      name: string;
+      level: number;
+      exp: number;
+      requiredExp: number;
+      progressPercent: number;
+      timeBonusPercent: number;
+    }> {
+      return Object.values(state.gameConfig.skills).map((skillConfig) => {
+        const skillState = state.playerState.skills[skillConfig.id] ?? {
+          skillId: skillConfig.id,
+          level: skillConfig.baseLevel,
+          exp: 0,
+        };
+
+        const isMax = skillState.level >= skillConfig.maxLevel;
+        const requiredExp = isMax ? 0 : calcRequiredExp(skillState.level, skillConfig.expFormula);
+        const progressPercent = isMax
+          ? 100
+          : requiredExp > 0
+            ? Math.min(100, (skillState.exp / requiredExp) * 100)
+            : 0;
+        const timeBonusPercent = Math.max(
+          0,
+          (skillState.level - 1) * skillConfig.timeReductionPerLevel * 100,
+        );
+
+        return {
+          id: skillConfig.id,
+          name: skillConfig.name,
+          level: skillState.level,
+          exp: skillState.exp,
+          requiredExp,
+          progressPercent,
+          timeBonusPercent,
+        };
+      });
+    },
   },
   actions: {
     addStep(): void {
@@ -227,6 +267,12 @@ export const useFlowStore = defineStore('flow', {
       for (const [resourceId, change] of Object.entries(this.result.resourceDelta)) {
         this.playerState.inventory[resourceId] = (this.playerState.inventory[resourceId] ?? 0) + change;
       }
+
+      this.playerState.skills = applyExpGains(
+        this.playerState.skills,
+        this.result.expDelta,
+        this.gameConfig.skills,
+      );
     },
     buyUpgrade(upgradeId: string): void {
       this.upgradeMessage = '';

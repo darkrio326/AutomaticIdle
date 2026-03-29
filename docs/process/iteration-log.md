@@ -46,6 +46,30 @@
 
 ## 迭代记录
 
+### ITER-010 技能面板与 EXP 可视化
+- 日期：2026-03-30
+- 所属版本：MVP / v0.1
+- 所属阶段：Phase 2
+- 类型：能力增强
+- 目标：完成并验收 IDEA-010，提供技能成长可视化，并把 EXP 结算接入状态流。
+- 改动范围：
+  - 新建 `src/components/SkillPanel.vue`
+  - 修改 `src/stores/flowStore.ts`
+  - 修改 `src/components/FlowEditor.vue`
+- 未改动范围：`src/core/*.ts` 算法实现、`src/config/*.json`、`src/components/SimResultPanel.vue`
+- 完成内容：
+  - 新增技能面板：展示技能等级、当前经验/所需经验、升级进度百分比、效率加成
+  - 在 `applySimulationResult()` 中接入 EXP 结算，应用资源结果时同步应用 `expDelta`
+  - 经验结算复用 `applyExpGains`，保持 core 逻辑复用与一致性
+  - 技能数据由 store getter 统一组装，组件仅负责展示
+  - 类型检查通过：`SkillPanel.vue`、`flowStore.ts`、`FlowEditor.vue` 无报错
+- 未完成内容：未实现技能详情页与历史经验曲线（后续可增强）
+- 测试情况：手动验证模拟后应用结果可提升技能经验并触发升级，面板数据同步更新
+- 风险与注意事项：当前经验结算绑定“应用结果”动作，后续若引入自动轮询模拟需复核结算时机
+- 回滚方式：回滚上述 3 个文件改动即可
+- 结论：IDEA-010 完成，经验系统从隐藏计算升级为可视化成长反馈。
+- 下一步建议：进入 IDEA-011（订单系统轻量版）。
+
 ### ITER-009 升级面板与购买流程
 - 日期：2026-03-30
 - 所属版本：MVP / v0.1
