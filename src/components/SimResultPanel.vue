@@ -5,6 +5,7 @@ import { useFlowStore } from '@/stores/flowStore';
 const flowStore = useFlowStore();
 
 const hasResult = computed(() => flowStore.result != null);
+const canApply = computed(() => flowStore.canApplyResult);
 
 const resourceDeltaEntries = computed(() => {
   if (!flowStore.result) return [];
@@ -35,6 +36,13 @@ const recommendedUpgrade = computed(() => {
 
     <p v-if="flowStore.errorMessage">{{ flowStore.errorMessage }}</p>
 
+    <h3>当前库存</h3>
+    <ul>
+      <li v-for="[id, amount] in flowStore.inventoryEntries" :key="id">
+        {{ id }}：{{ amount }}
+      </li>
+    </ul>
+
     <div v-if="!hasResult">
       <p>尚无模拟结果。请先在流程编辑器中点击运行模拟。</p>
     </div>
@@ -44,6 +52,13 @@ const recommendedUpgrade = computed(() => {
       <p>总金币：{{ flowStore.result!.totalGoldGained }}</p>
       <p>每秒金币：{{ flowStore.result!.goldPerSecond.toFixed(4) }}</p>
       <p>瓶颈步骤：{{ flowStore.result!.bottleneckRecipeId ?? '无' }}</p>
+
+      <div>
+        <button type="button" :disabled="!canApply" @click="flowStore.applySimulationResult">
+          应用本轮结果到库存
+        </button>
+        <p v-if="!canApply">当前库存不足以应用本轮结果，请先调整流程。</p>
+      </div>
 
       <h3>资源净变化</h3>
       <ul v-if="resourceDeltaEntries.length > 0">

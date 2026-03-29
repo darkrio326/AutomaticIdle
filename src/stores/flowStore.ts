@@ -24,6 +24,22 @@ interface FlowStepItem {
   repeat: number;
 }
 
+function canApplyResourceDelta(
+  inventory: Record<string, number>,
+  delta: Record<string, number>,
+): { ok: boolean; reason?: string } {
+  for (const [resourceId, change] of Object.entries(delta)) {
+    const nextAmount = (inventory[resourceId] ?? 0) + change;
+    if (nextAmount < 0) {
+      return {
+        ok: false,
+        reason: `库存不足：${resourceId} 需要至少 ${Math.abs(change)}，当前 ${inventory[resourceId] ?? 0}`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
 function toRecord<T extends { id: string }>(items: T[]): Record<string, T> {
   const result: Record<string, T> = {};
   for (const item of items) {
@@ -84,6 +100,9 @@ export const useFlowStore = defineStore('flow', {
     recipeOptions(state): RecipeConfig[] {
       return Object.values(state.gameConfig.recipes).filter((r) => r.enabled !== false);
     },
+    inventoryEntries(state): Array<[string, number]> {
+      return Object.entries(state.playerState.inventory).sort(([a], [b]) => a.localeCompare(b));
+    },
     flowDefinition(state): FlowDefinition {
       const steps: FlowStep[] = state.steps.map((s) => ({
         recipeId: s.recipeId,
@@ -94,6 +113,10 @@ export const useFlowStore = defineStore('flow', {
         name: state.flowName,
         steps,
       };
+    },
+    canApplyResult(state): boolean {
+      if (!state.result) return false;
+      return canApplyResourceDelta(state.playerState.inventory, state.result.resourceDelta).ok;
     },
   },
   actions: {
@@ -136,6 +159,24 @@ export const useFlowStore = defineStore('flow', {
         this.result = simulateFlow(this.flowDefinition, this.playerState, this.gameConfig);
       } catch (error) {
         this.errorMessage = error instanceof Error ? error.message : '模拟失败';
+      }
+    },
+    applySimulationResult(): void {
+      this.errorMessage = '';
+
+      if (!this.result) {
+        this.errorMessage = '请先运行模拟，再应用结果。';
+        return;
+      }
+
+      const check = canApplyResourceDelta(this.playerState.inventory, this.result.resourceDelta);
+      if (!check.ok) {
+        this.errorMessage = check.reason ?? '库存不足，无法应用本轮结果。';
+        return;
+      }
+
+      for (const [resourceId, change] of Object.entries(this.result.resourceDelta)) {
+        this.playerState.inventory[resourceId] = (this.playerState.inventory[resourceId] ?? 0) + change;
       }
     },
   },
