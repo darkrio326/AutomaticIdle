@@ -1,0 +1,80 @@
+[
+  {
+    "id": "mine_iron",
+    "name": "采矿",
+    "category": "gather",
+    "timeSeconds": 1,
+    "inputs": [],
+    "outputs": [
+      { "resourceId": "iron_ore", "amount": 1 }
+    ],
+    "expGains": [
+      { "skillId": "mining", "amount": 1 }
+    ],
+    "enabled": true
+  },
+  {
+    "id": "smelt_iron",
+    "name": "熔炼铁锭",
+    "category": "craft",
+    "timeSeconds": 2,
+    "inputs": [
+      { "resourceId": "iron_ore", "amount": 2 }
+    ],
+    "outputs": [
+      { "resourceId": "iron_ingot", "amount": 1 }
+    ],
+    "expGains": [
+      { "skillId": "smelting", "amount": 2 }
+    ],
+    "requiredSkillId": "smelting",
+    "requiredSkillLevel": 1,
+    "enabled": true
+  },
+  {
+    "id": "craft_iron_sword",
+    "name": "锻造铁剑",
+    "category": "craft",
+    "timeSeconds": 4,
+    "inputs": [
+      { "resourceId": "iron_ingot", "amount": 5 }
+    ],
+    "outputs": [
+      { "resourceId": "iron_sword", "amount": 1 }
+    ],
+    "expGains": [
+      { "skillId": "smithing", "amount": 5 }
+    ],
+    "requiredSkillId": "smithing",
+    "requiredSkillLevel": 1,
+    "enabled": true
+  },
+  {
+    "id": "sell_iron_ingot",
+    "name": "出售铁锭",
+    "category": "sell",
+    "timeSeconds": 0,
+    "inputs": [
+      { "resourceId": "iron_ingot", "amount": 1 }
+    ],
+    "outputs": [
+      { "resourceId": "gold", "amount": 8 }
+    ],
+    "expGains": [],
+    "enabled": true
+  },
+  {
+    "id": "sell_iron_sword",
+    "name": "出售铁剑",
+    "category": "sell",
+    "timeSeconds": 0,
+    "inputs": [
+      { "resourceId": "iron_sword", "amount": 1 }
+    ],
+    "outputs": [
+      { "resourceId": "gold", "amount": 100 }
+    ],
+    "expGains": [],
+    "enabled": true
+  }
+]

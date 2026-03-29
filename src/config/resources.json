@@ -1,0 +1,30 @@
+[
+  {
+    "id": "gold",
+    "name": "金币",
+    "type": "currency",
+    "sellPrice": -1,
+    "description": "通用货币"
+  },
+  {
+    "id": "iron_ore",
+    "name": "铁矿",
+    "type": "raw",
+    "sellPrice": 1,
+    "description": "基础矿物原料"
+  },
+  {
+    "id": "iron_ingot",
+    "name": "铁锭",
+    "type": "intermediate",
+    "sellPrice": 8,
+    "description": "由铁矿熔炼而成"
+  },
+  {
+    "id": "iron_sword",
+    "name": "铁剑",
+    "type": "product",
+    "sellPrice": 100,
+    "description": "基础成品武器"
+  }
+]

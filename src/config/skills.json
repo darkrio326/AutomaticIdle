@@ -1,0 +1,35 @@
+[
+  {
+    "id": "mining",
+    "name": "采矿",
+    "baseLevel": 1,
+    "timeReductionPerLevel": 0.02,
+    "maxLevel": 50,
+    "expFormula": {
+      "base": 10,
+      "exponent": 1.5
+    }
+  },
+  {
+    "id": "smelting",
+    "name": "熔炼",
+    "baseLevel": 1,
+    "timeReductionPerLevel": 0.02,
+    "maxLevel": 50,
+    "expFormula": {
+      "base": 10,
+      "exponent": 1.5
+    }
+  },
+  {
+    "id": "smithing",
+    "name": "锻造",
+    "baseLevel": 1,
+    "timeReductionPerLevel": 0.02,
+    "maxLevel": 50,
+    "expFormula": {
+      "base": 10,
+      "exponent": 1.5
+    }
+  }
+]
