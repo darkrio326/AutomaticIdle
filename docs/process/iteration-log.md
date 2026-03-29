@@ -46,6 +46,31 @@
 
 ## 迭代记录
 
+### ITER-009 升级面板与购买流程
+- 日期：2026-03-30
+- 所属版本：MVP / v0.1
+- 所属阶段：Phase 2
+- 类型：能力增强
+- 目标：完成并验收 IDEA-009，实现升级列表展示、购买交互与升级前后收益对比。
+- 改动范围：
+  - 新建 `src/components/UpgradePanel.vue`
+  - 修改 `src/stores/flowStore.ts`
+  - 修改 `src/components/FlowEditor.vue`
+- 未改动范围：`src/core/*.ts`、`src/config/*.json`、`src/components/SimResultPanel.vue`
+- 完成内容：
+  - 新增升级面板：展示升级名称、当前等级、消耗、可购状态
+  - 新增升级购买流程：调用 `purchaseUpgrade`，成功后同步库存和升级等级
+  - 新增升级前后收益对比：展示 totalTime / totalGoldGained / goldPerSecond 的前后值与 delta
+  - 升级失败原因可见：资源不足、技能不足、达上限等
+  - 购买后可自动刷新当前流程模拟结果，保证反馈实时
+  - 类型检查通过：`UpgradePanel.vue`、`flowStore.ts`、`FlowEditor.vue` 无报错
+- 未完成内容：未实现批量升级与多升级组合对比（后续可扩展）
+- 测试情况：手动验证升级可购/不可购路径、对比查看路径、购买后数值刷新路径，均符合预期
+- 风险与注意事项：当前收益对比为单次升级视角，不代表长期最优策略；后续可结合多轮模拟提升建议质量
+- 回滚方式：回滚上述 3 个文件改动即可
+- 结论：IDEA-009 完成，金币/物品投入路径已形成操作闭环。
+- 下一步建议：进入 IDEA-010（技能面板与 EXP 可视化）。
+
 ### ITER-008 资源库存与状态结算
 - 日期：2026-03-30
 - 所属版本：MVP / v0.1

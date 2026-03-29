@@ -5,6 +5,11 @@ import skillsArray from '@/config/skills.json';
 import upgradesArray from '@/config/upgrades.json';
 import ordersArray from '@/config/orders.json';
 import { simulateFlow } from '@/core/simulator';
+import {
+  canPurchaseUpgrade,
+  compareFlowBeforeAfterUpgrade,
+  purchaseUpgrade,
+} from '@/core/upgradeSystem';
 import type {
   FlowDefinition,
   FlowStep,
@@ -22,6 +27,25 @@ interface FlowStepItem {
   uid: number;
   recipeId: string;
   repeat: number;
+}
+
+interface UpgradeComparisonView {
+  upgradeId: string;
+  before: {
+    totalTime: number;
+    totalGoldGained: number;
+    goldPerSecond: number;
+  };
+  after: {
+    totalTime: number;
+    totalGoldGained: number;
+    goldPerSecond: number;
+  };
+  delta: {
+    totalTime: number;
+    totalGoldGained: number;
+    goldPerSecond: number;
+  };
 }
 
 function canApplyResourceDelta(
@@ -93,6 +117,8 @@ export const useFlowStore = defineStore('flow', {
     ] as FlowStepItem[],
     result: null as SimulationResult | null,
     errorMessage: '',
+    upgradeMessage: '',
+    upgradeComparison: null as UpgradeComparisonView | null,
     playerState: buildInitialPlayerState(),
     gameConfig: buildGameConfig(),
   }),
@@ -117,6 +143,29 @@ export const useFlowStore = defineStore('flow', {
     canApplyResult(state): boolean {
       if (!state.result) return false;
       return canApplyResourceDelta(state.playerState.inventory, state.result.resourceDelta).ok;
+    },
+    upgradeItems(state): Array<{
+      id: string;
+      name: string;
+      currentLevel: number;
+      maxLevel: number;
+      costs: UpgradeConfig['costs'];
+      canPurchase: boolean;
+      reason?: string;
+    }> {
+      return Object.values(state.gameConfig.upgrades).map((upgrade) => {
+        const currentLevel = state.playerState.upgrades[upgrade.id]?.level ?? 0;
+        const check = canPurchaseUpgrade(state.playerState, upgrade, state.gameConfig);
+        return {
+          id: upgrade.id,
+          name: upgrade.name,
+          currentLevel,
+          maxLevel: upgrade.maxLevel,
+          costs: upgrade.costs,
+          canPurchase: check.ok,
+          reason: check.reason,
+        };
+      });
     },
   },
   actions: {
@@ -177,6 +226,52 @@ export const useFlowStore = defineStore('flow', {
 
       for (const [resourceId, change] of Object.entries(this.result.resourceDelta)) {
         this.playerState.inventory[resourceId] = (this.playerState.inventory[resourceId] ?? 0) + change;
+      }
+    },
+    buyUpgrade(upgradeId: string): void {
+      this.upgradeMessage = '';
+
+      const purchaseResult = purchaseUpgrade(this.playerState, upgradeId, this.gameConfig);
+      if (!purchaseResult.success) {
+        this.upgradeMessage = purchaseResult.reason ?? '升级购买失败';
+        return;
+      }
+
+      this.playerState = purchaseResult.nextPlayerState;
+      this.upgradeMessage = `升级成功：${upgradeId}`;
+
+      if (this.result) {
+        this.runSimulation();
+      }
+    },
+    previewUpgradeComparison(upgradeId: string): void {
+      this.upgradeMessage = '';
+      this.upgradeComparison = null;
+
+      try {
+        const comparison = compareFlowBeforeAfterUpgrade(
+          this.flowDefinition,
+          this.playerState,
+          upgradeId,
+          this.gameConfig,
+        );
+
+        this.upgradeComparison = {
+          upgradeId: comparison.upgradeId,
+          before: {
+            totalTime: comparison.before.totalTime,
+            totalGoldGained: comparison.before.totalGoldGained,
+            goldPerSecond: comparison.before.goldPerSecond,
+          },
+          after: {
+            totalTime: comparison.after.totalTime,
+            totalGoldGained: comparison.after.totalGoldGained,
+            goldPerSecond: comparison.after.goldPerSecond,
+          },
+          delta: comparison.delta,
+        };
+      } catch (error) {
+        this.upgradeMessage = error instanceof Error ? error.message : '无法完成升级收益对比';
       }
     },
   },
