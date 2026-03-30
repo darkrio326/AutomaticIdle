@@ -7,6 +7,7 @@ export interface SaveSnapshot {
   playerState: PlayerState;
   completedOrderIds: string[];
   unlockedRecipeIds: string[];
+  lastSavedAt: number;
 }
 
 const SAVE_KEY = 'automatic-idle.save.v1';

@@ -50,6 +50,22 @@ interface UpgradeComparisonView {
   };
 }
 
+interface OfflineSettlementView {
+  elapsedSeconds: number;
+  appliedSeconds: number;
+  cycles: number;
+  resourceDelta: Record<string, number>;
+  expDelta: Record<string, number>;
+}
+
+const DEFAULT_FLOW_STEP: FlowStepItem = {
+  uid: 0,
+  recipeId: 'mine_iron',
+  repeat: 10,
+};
+
+const OFFLINE_MAX_SECONDS = 4 * 60 * 60;
+
 function canSubmitOrderRequirements(
   inventory: Record<string, number>,
   requirements: Array<{ resourceId: string; amount: number }>,
@@ -90,6 +106,66 @@ function toRecord<T extends { id: string }>(items: T[]): Record<string, T> {
   return result;
 }
 
+function clonePlayerState(playerState: PlayerState): PlayerState {
+  return {
+    inventory: { ...playerState.inventory },
+    skills: Object.fromEntries(
+      Object.entries(playerState.skills).map(([id, skill]) => [id, { ...skill }]),
+    ),
+    upgrades: Object.fromEntries(
+      Object.entries(playerState.upgrades).map(([id, upgrade]) => [id, { ...upgrade }]),
+    ),
+  };
+}
+
+function multiplyRecord(input: Record<string, number>, multiplier: number): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const [key, value] of Object.entries(input)) {
+    result[key] = value * multiplier;
+  }
+  return result;
+}
+
+function settleOfflineProgress(
+  flowName: string,
+  steps: FlowStepItem[],
+  playerState: PlayerState,
+  gameConfig: GameConfig,
+  elapsedSeconds: number,
+): OfflineSettlementView | null {
+  if (steps.length === 0) return null;
+
+  const flow: FlowDefinition = {
+    id: 'flow-default',
+    name: flowName,
+    steps: steps.map((s) => ({ recipeId: s.recipeId, repeat: s.repeat })),
+  };
+
+  const singleResult = simulateFlow(flow, playerState, gameConfig);
+  if (singleResult.totalTime <= 0) return null;
+
+  const appliedSeconds = Math.min(elapsedSeconds, OFFLINE_MAX_SECONDS);
+  let cycles = Math.floor(appliedSeconds / singleResult.totalTime);
+  if (cycles <= 0) return null;
+
+  while (cycles > 0) {
+    const resourceDelta = multiplyRecord(singleResult.resourceDelta, cycles);
+    const check = canApplyResourceDelta(playerState.inventory, resourceDelta);
+    if (check.ok) {
+      return {
+        elapsedSeconds,
+        appliedSeconds,
+        cycles,
+        resourceDelta,
+        expDelta: multiplyRecord(singleResult.expDelta, cycles),
+      };
+    }
+    cycles -= 1;
+  }
+
+  return null;
+}
+
 function buildGameConfig(): GameConfig {
   return {
     resources: toRecord(resourcesArray as ResourceConfig[]),
@@ -126,22 +202,19 @@ let stepUidSeed = 1;
 function buildInitialState() {
   const gameConfig = buildGameConfig();
   const snapshot = loadSaveSnapshot();
+  const now = Date.now();
 
   if (!snapshot) {
+    const defaultSteps = [{ ...DEFAULT_FLOW_STEP, uid: stepUidSeed++ }];
     return {
       flowName: '默认流程',
-      steps: [
-        {
-          uid: stepUidSeed++,
-          recipeId: 'mine_iron',
-          repeat: 10,
-        },
-      ] as FlowStepItem[],
+      steps: defaultSteps,
       result: null as SimulationResult | null,
       errorMessage: '',
       orderMessage: '',
       upgradeMessage: '',
       upgradeComparison: null as UpgradeComparisonView | null,
+      offlineMessage: '',
       completedOrderIds: [] as string[],
       playerState: buildInitialPlayerState(),
       gameConfig,
@@ -162,25 +235,65 @@ function buildInitialState() {
       repeat: Math.max(1, Math.floor(s.repeat)),
     }));
 
+  const safeSteps =
+    restoredSteps.length > 0 ? restoredSteps : [{ ...DEFAULT_FLOW_STEP, uid: stepUidSeed++ }];
+  const restoredPlayerState = clonePlayerState(snapshot.playerState);
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((now - (typeof snapshot.lastSavedAt === 'number' ? snapshot.lastSavedAt : now)) / 1000),
+  );
+
+  let offlineMessage = '';
+  const settlement = settleOfflineProgress(
+    snapshot.flowName || '默认流程',
+    safeSteps,
+    restoredPlayerState,
+    gameConfig,
+    elapsedSeconds,
+  );
+
+  if (settlement) {
+    for (const [resourceId, change] of Object.entries(settlement.resourceDelta)) {
+      restoredPlayerState.inventory[resourceId] =
+        (restoredPlayerState.inventory[resourceId] ?? 0) + change;
+    }
+
+    restoredPlayerState.skills = applyExpGains(
+      restoredPlayerState.skills,
+      settlement.expDelta,
+      gameConfig.skills,
+    );
+
+    const elapsedMinutes = Math.floor(settlement.elapsedSeconds / 60);
+    const appliedMinutes = Math.floor(settlement.appliedSeconds / 60);
+    offlineMessage = `离线 ${elapsedMinutes} 分钟（按上限结算 ${appliedMinutes} 分钟），已补发 ${settlement.cycles} 轮流程收益。`;
+  }
+
+  const unlockedRecipeIds = Object.values(gameConfig.recipes)
+    .filter((r) => r.enabled !== false)
+    .map((r) => r.id);
+
+  saveSnapshot({
+    version: 1,
+    flowName: snapshot.flowName || '默认流程',
+    steps: safeSteps.map((s) => ({ recipeId: s.recipeId, repeat: s.repeat })),
+    playerState: restoredPlayerState,
+    completedOrderIds: Array.isArray(snapshot.completedOrderIds) ? snapshot.completedOrderIds : [],
+    unlockedRecipeIds,
+    lastSavedAt: now,
+  });
+
   return {
     flowName: snapshot.flowName || '默认流程',
-    steps:
-      restoredSteps.length > 0
-        ? restoredSteps
-        : [
-            {
-              uid: stepUidSeed++,
-              recipeId: 'mine_iron',
-              repeat: 10,
-            },
-          ],
+    steps: safeSteps,
     result: null as SimulationResult | null,
     errorMessage: '',
     orderMessage: '',
     upgradeMessage: '',
     upgradeComparison: null as UpgradeComparisonView | null,
+    offlineMessage,
     completedOrderIds: Array.isArray(snapshot.completedOrderIds) ? snapshot.completedOrderIds : [],
-    playerState: snapshot.playerState,
+    playerState: restoredPlayerState,
     gameConfig,
   };
 }
@@ -325,6 +438,7 @@ export const useFlowStore = defineStore('flow', {
         playerState: this.playerState,
         completedOrderIds: [...this.completedOrderIds],
         unlockedRecipeIds,
+        lastSavedAt: Date.now(),
       });
     },
     addStep(): void {

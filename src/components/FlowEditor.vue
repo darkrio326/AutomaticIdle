@@ -21,6 +21,8 @@ function onRepeatInput(uid: number, value: string): void {
   <section>
     <h2>流程编辑器</h2>
 
+    <p v-if="flowStore.offlineMessage">{{ flowStore.offlineMessage }}</p>
+
     <div>
       <button type="button" @click="flowStore.addStep">新增步骤</button>
       <button type="button" :disabled="!canRun" @click="flowStore.runSimulation">运行模拟</button>
