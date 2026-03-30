@@ -46,6 +46,72 @@
 
 ## 迭代记录
 
+### ITER-017 运行时资源与 EXP 结算
+- 日期：2026-03-30
+- 所属版本：v0.1
+- 所属阶段：Phase 1
+- 类型：能力增强
+- 目标：实现单步动作完成后将资源和 EXP 变化确实写入 RuntimeState.playerState。
+- 改动范围：`src/core/runtimeEngine.ts`（executeOneRepeat、advanceStep 中的结算逻辑）
+- 未改动范围：其他所有文件
+- 完成内容：
+  - `executeOneRepeat()`：消耗输入资源、产出输出资源、结算 EXP 并调用 `applyExpGains()`（含启动升级）
+  - 资源写入 `state.playerState.inventory`；技能升级写入 `state.playerState.skills`
+  - 返回本次产出的货币量用于 GPS 窗口统计
+  - 类型检查通过
+- 未完成内容：无
+- 测试情况：类型检查通过；逻辑已与 simulator.ts 对齐校验
+- 风险与注意事项：playerState 为引用可写操作，外部不应共享同一对象；EXP 升级已内嵌，技能升级即时生效
+- 回滚方式：回滚 `src/core/runtimeEngine.ts` 即可
+- 结论：IDEA-021 完成，Phase 1 全量资源/EXP 结算已就位。
+- 下一步建议：进入 ITER-018（RuntimeStore + 待生效流程切换）。
+
+### ITER-016 步骤推进器 + 单步动作执行器
+- 日期：2026-03-30
+- 所属版本：v0.1
+- 所属阶段：Phase 1
+- 类型：能力增强
+- 目标：实现步骤推进器与单步动作执行器，达到自动循环执行流程的能力。
+- 改动范围：`src/core/runtimeEngine.ts`
+- 未改动范围：其他所有文件
+- 完成内容：
+  - `calcActualStepTime()`：与 simulator.ts 一致的技能+升级加速公式
+  - `executeOneRepeat()`：单步动作原子执行，不负责循环控制
+  - `advanceStep()`：基于 deltaMs 推进 stepProgress/repeatProgress，单帧内支持跨多次 repeat 和跨步骤
+  - 步骤切换时检查 pendingFlow 并应用（待生效机制已慿入）
+  - 流程末尾自动回绕＋loopCount++
+  - 安全阀：单帧最多 200 次迭代防止占用
+  - 类型检查通过
+- 未完成内容：无
+- 测试情况：类型检查通过
+- 风险与注意事项：极端帧率下跨步骤迭代有安全阀保护。deltaMs 小于当前步骤需求时不存在跨步。
+- 回滚方式：回滚 `src/core/runtimeEngine.ts` 即可
+- 结论：IDEA-019 + IDEA-020 完成，步骤自动推进与循环已就位。
+- 下一步建议：进入 ITER-017（运行时资源与 EXP 结算）。
+
+### ITER-015 Tick 时钟驱动器
+- 日期：2026-03-30
+- 所属版本：v0.1
+- 所属阶段：Phase 1
+- 类型：能力增强
+- 目标：实现基于 requestAnimationFrame + deltaTime 的时钟驱动器。
+- 改动范围：新建 `src/core/runtimeEngine.ts`
+- 未改动范围：其他所有文件
+- 完成内容：
+  - `RuntimeEngine` 类：`start()` / `pause()` / `resume()` / `stop()` 四种控制方法
+  - `_tick(now)`：基于 performance.now() 计算 deltaMs，推进步骤，推进 GPS 山示窗口
+  - resume() 重置 lastTickAt 避免恢复时补算暂停期 deltaTime
+  - GPS 5s 滑动窗口半重置（不跳变）
+  - `onTick(cb)` 注册回调，每帧广播状态变更到外部 store
+  - `updateConfig()` / `replaceState()` 支持外部更新配置和状态
+  - 类型检查通过
+- 未完成内容：无
+- 测试情况：类型检查通过
+- 风险与注意事项：需浏览器环境运行，src/env.d.ts 已内置 requestAnimationFrame 类型
+- 回滚方式：回滚 `src/core/runtimeEngine.ts` 即可
+- 结论：IDEA-018 完成，Tick 引擎基础已就位。
+- 下一步建议：进入 ITER-016（步骤推进器 + 单步执行器）。
+
 ### ITER-014 RuntimeState 数据模型
 - 日期：2026-03-30
 - 所属版本：v0.1
