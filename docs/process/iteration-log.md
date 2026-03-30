@@ -46,6 +46,27 @@
 
 ## 迭代记录
 
+### ITER-014 RuntimeState 数据模型
+- 日期：2026-03-30
+- 所属版本：v0.1
+- 所属阶段：Phase 1
+- 类型：能力增强
+- 目标：定义 runtime 引擎所需全量运行时状态类型，为 Tick 驱动器与 RuntimeStore 建立稳定边界。
+- 改动范围：
+  - 新建 `src/core/runtimeTypes.ts`
+- 未改动范围：所有现有文件（纯新增）
+- 完成内容：
+  - 定义 `RuntimeStatus`（idle/running/paused）
+  - 定义 `RuntimeState` 接口，覆盖引擎控制（status/lastTickAt）、流程状态（activeFlow/pendingFlow）、步骤执行（stepIndex/stepProgress/repeatProgress/loopCount）、玩家状态副本（playerState）、GPS 统计摘要（gps/goldInWindow/gpsWindowMs）
+  - 导出 `createInitialRuntimeState(playerState)` 工厂函数
+  - `vue-tsc --noEmit` 无报错
+- 未完成内容：无
+- 测试情况：类型检查通过
+- 风险与注意事项：playerState 为运行时可写副本，需由 runtimeStore 与 flowStore 同步边界，后续 ITER-018 明确
+- 回滚方式：删除 `src/core/runtimeTypes.ts` 即可
+- 结论：IDEA-017 完成，runtime 引擎地基已立。
+- 下一步建议：进入 ITER-015（Tick 时钟驱动器）。
+
 ### ITER-013 离线收益基础版
 - 日期：2026-03-30
 - 所属版本：MVP / v0.1
