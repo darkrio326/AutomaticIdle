@@ -46,6 +46,31 @@
 
 ## 迭代记录
 
+### ITER-018 RuntimeStore 与待生效流程切换
+- 日期：2026-03-30
+- 所属版本：v0.1
+- 所属阶段：Phase 2
+- 类型：能力增强
+- 目标：建立 RuntimeStore，实现待生效流程切换，抓通引擎层与 Vue 响应式状态层的连接。
+- 改动范围：新建 `src/stores/runtimeStore.ts`
+- 未改动范围：`flowStore.ts`、`src/core/*.ts`、组件层
+- 完成内容：
+  - `useRuntimeStore` Pinia Store：持有 RuntimeEngine 实例（模块级，不放 Pinia state）
+  - `initEngine()`：从 flowStore 取初始流程/玩家状态创建引擎实例
+  - `start()` / `pause()` / `resume()` / `stop()` 控制接口
+  - `notifyFlowChanged()`：运行中写入 pendingFlow，idle 时直接替换
+  - `notifyConfigChanged()`：升级后同步最新 GameConfig 到引擎
+  - `_onEngineTick()`：每帧将引擎状态投影到 Pinia 响应式字段
+  - `_syncPlayerStateBack()`：每 2s 回写 playerState 到 flowStore 并持久化
+  - `stepProgressRatio` getter：进度条 0~1 比例
+  - 类型检查通过
+- 未完成内容：当前进度条百分比使用 recipe.timeSeconds 简化计算，未反映加速变量（进度条视觉可容忍）
+- 测试情况：类型检查通过
+- 风险与注意事项：_syncPlayerStateBack 每 2s 触发一次持久化，引擎擅毁时最多丢失 2s 收益；引擎持有 playerState 副本，需避免外部共享引用
+- 回滚方式：删除 `src/stores/runtimeStore.ts` 即可（未修改其他文件）
+- 结论：IDEA-022 + IDEA-023 完成，Phase 2 闭环。
+- 下一步建议：进入 ITER-019（步骤高亮 + 进度条 UI）。
+
 ### ITER-017 运行时资源与 EXP 结算
 - 日期：2026-03-30
 - 所属版本：v0.1
