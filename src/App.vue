@@ -1,5 +1,13 @@
 <script setup lang="ts">
+import { onMounted } from 'vue';
 import FlowEditor from '@/components/FlowEditor.vue';
+import { useRuntimeStore } from '@/stores/runtimeStore';
+
+const runtimeStore = useRuntimeStore();
+
+onMounted(() => {
+  runtimeStore.initEngine();
+});
 </script>
 
 <template>

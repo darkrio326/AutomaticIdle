@@ -46,6 +46,55 @@
 
 ## 迭代记录
 
+### ITER-020 资源平滑变化 + 实时 GPS 刷新
+- 日期：2026-03-30
+- 所属版本：v0.1
+- 所属阶段：Phase 3
+- 类型：能力增强
+- 目标：实现资源平滑更新和实时 GPS 展示。
+- 改动范围：
+  - 修改 `src/stores/runtimeStore.ts`（新增 liveInventory 字段，每帧同步）
+  - 修改 `src/components/SimResultPanel.vue`（实时摘要区、实时库存展示）
+- 未改动范围：其他文件
+- 完成内容：
+  - runtimeStore 新增 `liveInventory` 字段，每帧从 engine playerState 投影，不触发持久化
+  - SimResultPanel 展示"实时 GPS" + "循环次数"实时摘要区
+  - 运行中库存展示切换为 liveInventory（每帧更新），停止后恢复 flowStore.inventoryEntries
+  - 库存条目改为内联标签样式展示
+  - 静态模拟提示文案更新，区分"静态模拟"与"实时运行"语义
+  - 类型检查通过；npm run build 成功（51 modules）
+- 未完成内容：无
+- 测试情况：类型检查通过；构建通过
+- 风险与注意事项：liveInventory 每帧展开拷贝，对大库存对象有微小内存开销，当前规模可忽略
+- 回滚方式：回滚上述两个文件改动即可
+- 结论：IDEA-025 + IDEA-026 完成，资源实时反馈与 GPS 展示已就位。
+- 下一步建议：进入 ITER-021（UI 收敛，参考 prototype 对齐）。
+
+### ITER-019 步骤高亮与进度条组件
+- 日期：2026-03-30
+- 所属版本：v0.1
+- 所属阶段：Phase 3
+- 类型：能力增强
+- 目标：实现当前执行步骤高亮 + 进度条展示。
+- 改动范围：
+  - 修改 `src/App.vue`（添加 onMounted 初始化引擎）
+  - 修改 `src/components/FlowEditor.vue`（运行控制按键、步骤高亮、进度条）
+- 未改动范围：引擎层和 stores 层
+- 完成内容：
+  - App.vue `onMounted` 调用 `runtimeStore.initEngine()`
+  - FlowEditor 新增运行控制区：⯈ 开始运行 / ⏸ 暂停 / ⏹ 停止 / ⯈ 继续 四个按丫按状态条件渲染
+  - 步骤列表当前步骤添加 `step-active` 高亮样式
+  - 当前步骤展示进度条：指示当前 repeat / 总 repeat 与百分比
+  - 步骤编辑操作（新增/删除/改配方/改次数）后通知 runtimeStore.notifyFlowChanged()
+  - 待生效提示文案展示
+  - 类型检查通过
+- 未完成内容：无
+- 测试情况：类型检查通过
+- 风险与注意事项：进度条百分比使用 recipe.timeSeconds 简化计算（不含加速加成），视觉目的可容忍
+- 回滚方式：回滚上述两个文件改动即可
+- 结论：IDEA-024 完成，步骤高亮与进度条已就位。
+- 下一步建议：进入 ITER-020（资源平滑 + 实时 GPS 刷新）。
+
 ### ITER-018 RuntimeStore 与待生效流程切换
 - 日期：2026-03-30
 - 所属版本：v0.1

@@ -51,6 +51,8 @@ export const useRuntimeStore = defineStore("runtime", {
     loopCount: 0,
     /** 实时 GPS（5s 滑动窗口） */
     gps: 0,
+    /** 实时库存快照（每帧从 engine playerState 投影，不触发持久化）*/
+    liveInventory: {} as Record<string, number>,
     /** 当前活跃流程 */
     activeFlow: null as FlowDefinition | null,
     /** 是否有待生效流程 */
@@ -168,6 +170,9 @@ export const useRuntimeStore = defineStore("runtime", {
       this.gps = state.gps;
       this.activeFlow = state.activeFlow;
       this.hasPendingFlow = state.pendingFlow != null;
+
+      // 每帧同步实时库存（仅读取，不触发持久化）
+      this.liveInventory = { ...state.playerState.inventory };
 
       // 计算当前 repeat 总耗时（用于进度条）
       if (state.activeFlow != null) {
