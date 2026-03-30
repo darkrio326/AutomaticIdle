@@ -458,7 +458,7 @@
 - 计划已落地产物：simulator 已完成、runtime 拆分方案。
 
 ### IDEA-028 基于 Prototype 的工程 UI 收敛
-- 状态：NEW
+- 状态：DONE
 - 优先级：P1
 - 来源：prototype 原型对齐
 - 日期：2026-03-30

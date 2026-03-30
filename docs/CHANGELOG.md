@@ -14,6 +14,7 @@
 - [2026-03-30 09:45 +0800] 小修改：在迭代想法池新增 IDEA-028（基于 prototype 原型优化工程 UI），用于承接原型到工程界面的对齐落地。
 - [2026-03-30 09:35 +0800] 小修改：在迭代想法池新增 IDEA-017 至 IDEA-027（runtime 拆分方案），用于承接 IDEA-016 的执行拆分。
 - [2026-03-30 09:20 +0800] 小修改：在迭代想法池新增 IDEA-016（实时运行态与动态资源反馈），并更新 backlog 文档日期。
+- [2026-03-30 12:00 +0800] ITER-021：新建 `src/style.css`（全局主题变量 + reset + 组件基础样式），修改 main.ts 引入、App.vue 增加 header 布局；CSS 参考 prototype theme.css 语义设计。
 - [2026-03-30 11:30 +0800] ITER-019/020：修改 App.vue（initEngine）、FlowEditor.vue（运行控制按键、步骤高亮、进度条）、runtimeStore（liveInventory）、SimResultPanel（实时 GPS 摘要、实时库存展示）；构建通过（51 modules）。
 - [2026-03-30 11:00 +0800] ITER-018：新建 `src/stores/runtimeStore.ts`，建立 RuntimeStore Pinia 层，实现 initEngine/start/pause/resume/stop/notifyFlowChanged/notifyConfigChanged 控制接口，每帧将引擎状态投影到 Vue 响应式字段。
 - [2026-03-30 10:40 +0800] ITER-015/016/017：新建 `src/core/runtimeEngine.ts`，实现 RuntimeEngine 类（rAF tick 循环、步骤推进器、单步动作执行器、资源/EXP 结算、GPS 滑动窗口），待生效流程切换框架已就位。

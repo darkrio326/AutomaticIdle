@@ -46,6 +46,30 @@
 
 ## 迭代记录
 
+### ITER-021 UI 收敛（参考 Prototype 对齐）
+- 日期：2026-03-30
+- 所属版本：v0.1
+- 所属阶段：Phase 4
+- 类型：能力增强
+- 目标：参考 prototype theme.css 主题变量体系，建立工程全局样式基线并对齐页面信息层次。
+- 改动范围：
+  - 新建 `src/style.css`（全局 CSS 变量体系 + reset + 基础组件样式）
+  - 修改 `src/main.ts`（引入 style.css）
+  - 修改 `src/App.vue`（header 布局 + card 层次）
+- 未改动范围：各面板组件（依赖全局 section 样式提升）
+- 完成内容：
+  - `src/style.css`：引入 CSS 自定义变量（--background/--foreground/--primary/--accent/--border/--radius 等）参考 prototype 语义设计
+  - 全局 button/select/input/section/ul 样式统一
+  - App.vue header 区域 + subtitle 展示
+  - 每个 section 卡片化（白底、border、阴影、圆角）
+  - 类型检查通过；npm run build 成功（53 modules，CSS 3.88KB）
+- 未完成内容：暗色主题未实现（可后续迭代）
+- 测试情况：类型检查通过；构建通过
+- 风险与注意事项：展示类改动不影响逻辑层，回滚只需移除 style.css 并还原 main.ts 导入
+- 回滚方式：回滚上述 3 个文件改动即可
+- 结论：IDEA-028 完成，Phase 4 闭环，v0.1 全量 ITER 已落地。
+- 下一步建议：执行 v0.1 综合验收，完成后出 v0.1-RELEASE.md。
+
 ### ITER-020 资源平滑变化 + 实时 GPS 刷新
 - 日期：2026-03-30
 - 所属版本：v0.1
