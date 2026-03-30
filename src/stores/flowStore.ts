@@ -81,12 +81,20 @@ function toRecord<T extends { id: string }>(items: T[]): Record<string, T> {
 }
 
 export function clonePlayerState(playerState: PlayerState): PlayerState {
+  // purchasedTools 可能是 Set（正常情形）、string[]（兼容）或 {} (JSON 反序列化后的 Set)
+  const raw = playerState.purchasedTools;
+  const purchasedTools =
+    raw instanceof Set
+      ? new Set<string>(raw)
+      : Array.isArray(raw)
+        ? new Set<string>(raw)
+        : new Set<string>();
   return {
     inventory: { ...playerState.inventory },
     skills: Object.fromEntries(
       Object.entries(playerState.skills).map(([id, skill]) => [id, { ...skill }]),
     ),
-    purchasedTools: playerState.purchasedTools ? new Set(playerState.purchasedTools) : new Set(),
+    purchasedTools,
   };
 }
 
@@ -630,6 +638,8 @@ export const useFlowStore = defineStore('flow', {
       const toolStore = useToolStore();
       if (snapshot?.purchasedToolIds) {
         toolStore.restorePurchasedTools(snapshot.purchasedToolIds);
+        // 同步回 playerState，确保引擎和离线结算能正确读取工具加速
+        this.playerState.purchasedTools = new Set<string>(snapshot.purchasedToolIds);
       }
     },
 
@@ -651,6 +661,12 @@ export const useFlowStore = defineStore('flow', {
         this.errorMessage = result.reason ?? '购买失败';
         return;
       }
+
+      // 同步到 playerState，确保引擎即时感知新工具
+      if (!this.playerState.purchasedTools) {
+        this.playerState.purchasedTools = new Set<string>();
+      }
+      this.playerState.purchasedTools.add(toolId);
 
       this.errorMessage = `购买成功：${this.gameConfig.tools?.[toolId]?.name ?? toolId}`;
       this.persistState();
