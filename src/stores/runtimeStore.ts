@@ -22,6 +22,7 @@ import type { RuntimeState, RuntimeStatus } from "@/core/runtimeTypes";
 import type { FlowDefinition } from "@/core/types";
 import { clonePlayerState } from "@/stores/flowStore";
 import { useFlowStore } from "./flowStore";
+import { useToolStore } from "./toolStore";
 
 /** 每隔多少帧将 playerState 回写到 flowStore（降低持久化频率）*/
 const SYNC_BACK_EVERY_MS = 2_000;
@@ -83,6 +84,7 @@ export const useRuntimeStore = defineStore("runtime", {
      */
     initEngine(): void {
       const flowStore = useFlowStore();
+      const toolStore = useToolStore();
 
       const initialState = createInitialRuntimeState(
         clonePlayerState(flowStore.playerState)
@@ -90,6 +92,7 @@ export const useRuntimeStore = defineStore("runtime", {
       initialState.activeFlow = JSON.parse(
         JSON.stringify(flowStore.flowDefinition)
       );
+      initialState.toolLevels = { ...toolStore.toolLevels };
 
       _engine = new RuntimeEngine(initialState, flowStore.gameConfig);
 
@@ -174,6 +177,20 @@ export const useRuntimeStore = defineStore("runtime", {
     notifyConfigChanged(): void {
       const flowStore = useFlowStore();
       getEngine().updateConfig(flowStore.gameConfig);
+    },
+
+    /**
+     * 外部（如订单提交、建筑/工具购买）修改了 flowStore.playerState 后，
+     * 立即把最新状态同步到引擎，避免被定时回写覆盖。
+     */
+    syncPlayerStateFromFlowStore(): void {
+      if (_engine == null) return;
+      const flowStore = useFlowStore();
+      const toolStore = useToolStore();
+      const engineState = getEngine().state as RuntimeState;
+      (engineState as RuntimeState).playerState = clonePlayerState(flowStore.playerState);
+      (engineState as RuntimeState).toolLevels = { ...toolStore.toolLevels };
+      this.liveInventory = { ...engineState.playerState.inventory };
     },
 
     // ── 私有方法 ──────────────────────────────────────────────────────────────

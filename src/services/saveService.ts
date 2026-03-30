@@ -15,6 +15,7 @@ export interface SaveSnapshot {
   unlockedRecipeIds: string[];
   purchasedBuildingIds?: string[];
   purchasedToolIds?: string[];
+  toolLevels?: Record<string, number>;
   orderSlots?: OrderSlotSnapshot[];
   lastSavedAt: number;
 }

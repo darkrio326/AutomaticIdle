@@ -5,6 +5,8 @@ export const useToolStore = defineStore('tool', {
   state: () => ({
     /** 已购工具集合（toolId 集合） */
     purchasedTools: new Set<string>(),
+    /** 各工具升级等级（toolId → 当前等级，未升级为 0） */
+    toolLevels: {} as Record<string, number>,
   }),
 
   getters: {
@@ -154,10 +156,69 @@ export const useToolStore = defineStore('tool', {
     },
 
     /**
+     * 恢复工具升级等级（从存档加载）
+     */
+    restoreToolLevels(levels: Record<string, number>) {
+      this.toolLevels = { ...levels };
+    },
+
+    /**
+     * 检查指定工具是否可以升级
+     */
+    canUpgradeTool(
+      toolId: string,
+      playerState: PlayerState,
+      gameConfig: GameConfig
+    ): { canUpgrade: boolean; reason?: string } {
+      if (!this.purchasedTools.has(toolId)) {
+        return { canUpgrade: false, reason: '工具未购买' };
+      }
+      const toolConfig = gameConfig.tools?.[toolId];
+      if (!toolConfig?.upgrade) {
+        return { canUpgrade: false, reason: '该工具不支持升级' };
+      }
+      const currentLevel = this.toolLevels[toolId] ?? 0;
+      if (currentLevel >= toolConfig.upgrade.maxLevel) {
+        return { canUpgrade: false, reason: '已达满级' };
+      }
+      for (const [resourceId, amount] of Object.entries(toolConfig.upgrade.costPerLevel)) {
+        const current = playerState.inventory[resourceId] ?? 0;
+        if (current < amount) {
+          return {
+            canUpgrade: false,
+            reason: `${gameConfig.resources?.[resourceId]?.name ?? resourceId} 不足（需 ${amount}，有 ${current}）`,
+          };
+        }
+      }
+      return { canUpgrade: true };
+    },
+
+    /**
+     * 升级工具（扣除资源、等级 +1）
+     */
+    upgradeTool(
+      toolId: string,
+      playerState: PlayerState,
+      gameConfig: GameConfig
+    ): { success: boolean; reason?: string } {
+      const check = this.canUpgradeTool(toolId, playerState, gameConfig);
+      if (!check.canUpgrade) {
+        return { success: false, reason: check.reason };
+      }
+      const toolConfig = gameConfig.tools![toolId];
+      for (const [resourceId, amount] of Object.entries(toolConfig.upgrade!.costPerLevel)) {
+        playerState.inventory[resourceId] = (playerState.inventory[resourceId] ?? 0) - amount;
+      }
+      this.toolLevels[toolId] = (this.toolLevels[toolId] ?? 0) + 1;
+      return { success: true };
+    },
+
+    /**
      * 清空已购工具状态
      */
     clearPurchasedTools() {
       this.purchasedTools.clear();
+      this.toolLevels = {};
     },
   },
 });

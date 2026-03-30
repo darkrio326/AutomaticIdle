@@ -52,7 +52,10 @@ function generateOrder(
     uncommon: '收购',
     rare: '急需',
   };
-  const name = `${rarityLabel[template.rarity] ?? ''}${mainResourceName}订单`;
+  const storyTitle = template.titlePool && template.titlePool.length > 0
+    ? template.titlePool[randInt(0, template.titlePool.length - 1)]
+    : null;
+  const name = storyTitle ?? `${rarityLabel[template.rarity] ?? ''}${mainResourceName}订单`;
 
   return {
     instanceId: `ord_${now}_${instanceSeed++}`,
@@ -182,6 +185,16 @@ export const useOrderStore = defineStore('order', {
       if (!slot) return;
       slot.order = null;
       slot.cooldownEndsAt = Date.now() + DELETE_COOLDOWN_MS;
+    },
+
+    refreshOrder(instanceId: string, gameConfig: GameConfig): void {
+      const slot = this.slots.find((s) => s.order?.instanceId === instanceId);
+      if (!slot) return;
+      const now = Date.now();
+      const templates = orderTemplatesData as OrderTemplate[];
+      const template = weightedRandom(templates);
+      slot.order = generateOrder(template, gameConfig, now);
+      slot.cooldownEndsAt = null;
     },
 
     restoreFromSnapshot(slots: OrderSlotSnapshot[]): void {

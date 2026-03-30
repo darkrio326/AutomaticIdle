@@ -2,7 +2,12 @@
   {
     "id": "order_iron_ingot",
     "rarity": "common",
-    "weight": 50,
+    "weight": 40,
+    "titlePool": [
+      "铁匠工坊补锭委托",
+      "边防修缮急需铁锭",
+      "蒸汽机修理厂备料单"
+    ],
     "requirementPool": [{ "resourceId": "iron_ingot", "min": 10, "max": 20 }],
     "rewardPool": [{ "resourceId": "gold", "min": 150, "max": 250 }],
     "durationSeconds": { "min": 600, "max": 900 }
@@ -10,7 +15,12 @@
   {
     "id": "order_copper_ingot",
     "rarity": "uncommon",
-    "weight": 30,
+    "weight": 24,
+    "titlePool": [
+      "炼金学会铜锭采购",
+      "电报局导线紧急加单",
+      "机械学院实验耗材补给"
+    ],
     "requirementPool": [{ "resourceId": "copper_ingot", "min": 8, "max": 15 }],
     "rewardPool": [{ "resourceId": "gold", "min": 250, "max": 400 }],
     "durationSeconds": { "min": 900, "max": 1500 }
@@ -18,9 +28,40 @@
   {
     "id": "order_steel_ingot",
     "rarity": "rare",
-    "weight": 10,
+    "weight": 8,
+    "titlePool": [
+      "要塞扩建钢锭征调令",
+      "重工车间高温锻材采购",
+      "远征军装甲加急补给"
+    ],
     "requirementPool": [{ "resourceId": "steel_ingot", "min": 3, "max": 6 }],
     "rewardPool": [{ "resourceId": "gold", "min": 800, "max": 1200 }],
     "durationSeconds": { "min": 1800, "max": 3600 }
+  },
+  {
+    "id": "order_iron_ore_bulk",
+    "rarity": "common",
+    "weight": 24,
+    "titlePool": [
+      "冶炼厂矿石周转单",
+      "矿务站原矿临时补仓",
+      "工地夜班粗矿急采委托"
+    ],
+    "requirementPool": [{ "resourceId": "iron_ore", "min": 24, "max": 48 }],
+    "rewardPool": [{ "resourceId": "gold", "min": 130, "max": 230 }],
+    "durationSeconds": { "min": 480, "max": 900 }
+  },
+  {
+    "id": "order_iron_sword_frontline",
+    "rarity": "rare",
+    "weight": 6,
+    "titlePool": [
+      "前线军械库铁剑征调令",
+      "骑士团演武铁剑补给",
+      "边境哨站武备加急采购"
+    ],
+    "requirementPool": [{ "resourceId": "iron_sword", "min": 1, "max": 3 }],
+    "rewardPool": [{ "resourceId": "gold", "min": 520, "max": 980 }],
+    "durationSeconds": { "min": 900, "max": 1800 }
   }
 ]

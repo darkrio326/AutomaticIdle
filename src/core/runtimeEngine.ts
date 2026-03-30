@@ -54,6 +54,7 @@ function calcActualStepTime(
     purchasedTools instanceof Set ? purchasedTools : new Set<string>();
   if (purchasedTools && config.tools) {
     let bestTier = -1;
+    let bestToolId = '';
     for (const toolId of purchasedToolsIterable) {
       const toolConfig = config.tools[toolId];
       if (!toolConfig) continue;
@@ -62,7 +63,17 @@ function calcActualStepTime(
       const tier = toolConfig.tier ?? 0;
       if (tier > bestTier) {
         bestTier = tier;
+        bestToolId = toolId;
         toolMultiplier = effect.timeMultiplier;
+      }
+    }
+    // 叠加升级等级带来的额外效率
+    if (bestToolId && state.toolLevels) {
+      const upgradeLevel = state.toolLevels[bestToolId] ?? 0;
+      if (upgradeLevel > 0) {
+        const toolConfig = config.tools[bestToolId];
+        const effPerLevel = toolConfig?.upgrade?.efficiencyPerLevel ?? 0;
+        toolMultiplier = Math.max(0.1, toolMultiplier - upgradeLevel * effPerLevel);
       }
     }
   }

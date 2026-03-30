@@ -23,6 +23,13 @@ interface ToolItem {
   canPurchase: boolean;
   reason?: string;
   effects: ToolEffect[];
+  // 升级相关
+  upgradeLevel: number;
+  upgradeMaxLevel: number;
+  upgradeCost: Record<string, number>;
+  canUpgrade: boolean;
+  upgradeReason?: string;
+  hasUpgrade: boolean;
 }
 
 const toolItems = computed((): ToolItem[] => {
@@ -45,6 +52,15 @@ const toolItems = computed((): ToolItem[] => {
       speedPercent: Math.round((1 - effect.timeMultiplier) * 100),
     }));
 
+    const upgradeLevel = toolStore.toolLevels[toolId] ?? 0;
+    const upgradeConfig = toolConfig.upgrade;
+    const upgradeMaxLevel = upgradeConfig?.maxLevel ?? 0;
+    const upgradeCost = upgradeConfig?.costPerLevel ?? {};
+    const hasUpgrade = !!upgradeConfig;
+    const upgradeCheck = isPurchased && hasUpgrade
+      ? toolStore.canUpgradeTool(toolId, flowStore.playerState, flowStore.gameConfig)
+      : { canUpgrade: false, reason: '' };
+
     return {
       id: toolId,
       name: toolConfig.name,
@@ -55,8 +71,24 @@ const toolItems = computed((): ToolItem[] => {
       canPurchase: check.canBuy && !isPurchased,
       reason: check.reason,
       effects,
+      upgradeLevel,
+      upgradeMaxLevel,
+      upgradeCost,
+      canUpgrade: upgradeCheck.canUpgrade,
+      upgradeReason: upgradeCheck.reason,
+      hasUpgrade,
     };
   });
+});
+
+const toolMessage = computed(() => {
+  const msg = flowStore.errorMessage || '';
+  return msg.startsWith('工具') ? msg : '';
+});
+
+const toolMessageIsSuccess = computed(() => {
+  const msg = toolMessage.value;
+  return msg.includes('成功');
 });
 
 function formatCost(costs: Record<string, number>): string {
@@ -67,11 +99,15 @@ function formatCost(costs: Record<string, number>): string {
       const name = flowStore.gameConfig.resources[resourceId]?.name ?? resourceId;
       return `${name} ×${amount}`;
     })
-    .join(' / ');
+    .join(' + ');
 }
 
 function handlePurchaseTool(toolId: string): void {
   flowStore.purchaseTool(toolId);
+}
+
+function handleUpgradeTool(toolId: string): void {
+  flowStore.upgradeTool(toolId);
 }
 </script>
 
@@ -121,7 +157,37 @@ function handlePurchaseTool(toolId: string): void {
         >
           {{ tool.canPurchase ? (tool.isFree ? '领取' : '购买') : (tool.reason ?? '资源不足') }}
         </button>
+
+        <!-- 升级区块（已购且有升级配置） -->
+        <div v-if="tool.isPurchased && tool.hasUpgrade" class="tool-upgrade">
+          <div class="upgrade-row">
+            <div class="upgrade-level">
+              <span class="upgrade-label">升级</span>
+              <span class="upgrade-pip" v-for="i in tool.upgradeMaxLevel" :key="i" :class="{ filled: i <= tool.upgradeLevel }"></span>
+              <span class="upgrade-lv-text">Lv.{{ tool.upgradeLevel }}/{{ tool.upgradeMaxLevel }}</span>
+            </div>
+            <button
+              class="btn-upgrade"
+              :class="{ 'btn-upgrade-ready': tool.canUpgrade }"
+              :disabled="!tool.canUpgrade"
+              :title="tool.canUpgrade ? formatCost(tool.upgradeCost) : (tool.upgradeReason ?? '')"
+              @click="handleUpgradeTool(tool.id)"
+            >
+              {{ tool.upgradeLevel >= tool.upgradeMaxLevel ? '满级' : (tool.canUpgrade ? '升级' : '升级') }}
+            </button>
+          </div>
+          <div v-if="tool.upgradeLevel < tool.upgradeMaxLevel" class="upgrade-cost-hint">
+            {{ formatCost(tool.upgradeCost) }}
+          </div>
+        </div>
       </div>
+    </div>
+    <div
+      v-if="toolMessage"
+      class="panel-message"
+      :class="{ 'panel-message-success': toolMessageIsSuccess, 'panel-message-error': !toolMessageIsSuccess }"
+    >
+      {{ toolMessage }}
     </div>
   </section>
 </template>
@@ -277,5 +343,106 @@ function handlePurchaseTool(toolId: string): void {
 .btn-purchase-ready:hover {
   background: var(--color-accent-dark, #2563eb);
   border-color: var(--color-accent-dark, #2563eb);
+}
+
+.panel-message {
+  margin-top: 8px;
+  padding: 7px 10px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+
+.panel-message-success {
+  background: var(--emerald-bg);
+  color: var(--emerald);
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+.panel-message-error {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: rgba(248, 113, 113, 0.28);
+}
+
+/* 升级区块 */
+.tool-upgrade {
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+.upgrade-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.upgrade-level {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.upgrade-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.upgrade-pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  background: transparent;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.upgrade-pip.filled {
+  background: var(--indigo);
+  border-color: var(--indigo);
+}
+
+.upgrade-lv-text {
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  margin-left: 2px;
+}
+
+.btn-upgrade {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: not-allowed;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-upgrade-ready {
+  background: var(--indigo-bg);
+  color: var(--indigo);
+  border-color: var(--indigo);
+  cursor: pointer;
+}
+
+.btn-upgrade-ready:hover:not(:disabled) {
+  background: var(--indigo);
+  color: #fff;
+}
+
+.upgrade-cost-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 3px;
 }
 </style>

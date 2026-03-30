@@ -3,6 +3,7 @@
     "tier": 1,
     "name": "铁镐",
     "cost": { "iron_ingot": 10 },
+    "upgrade": { "maxLevel": 5, "costPerLevel": { "iron_ingot": 5, "gold": 25 }, "efficiencyPerLevel": 0.01 },
     "effects": {
       "mine_iron": { "timeMultiplier": 0.9 }
     }
@@ -11,6 +12,7 @@
     "tier": 2,
     "name": "铜镐",
     "cost": { "copper_ingot": 10 },
+    "upgrade": { "maxLevel": 5, "costPerLevel": { "copper_ingot": 5, "gold": 40 }, "efficiencyPerLevel": 0.02 },
     "effects": {
       "mine_iron": { "timeMultiplier": 0.7 },
       "mine_copper": { "timeMultiplier": 0.7 }
@@ -20,6 +22,7 @@
     "tier": 2,
     "name": "熔炉",
     "cost": { "copper_ingot": 15 },
+    "upgrade": { "maxLevel": 5, "costPerLevel": { "copper_ingot": 5, "gold": 40 }, "efficiencyPerLevel": 0.02 },
     "effects": {
       "smelt_iron": { "timeMultiplier": 0.8 },
       "smelt_copper": { "timeMultiplier": 0.8 }
@@ -28,34 +31,30 @@
   "steel_pickaxe": {
     "tier": 3,
     "name": "钢镐",
-    "cost": {
-      "steel_ingot": 10
-    },
+    "cost": { "steel_ingot": 10 },
+    "upgrade": { "maxLevel": 5, "costPerLevel": { "steel_ingot": 5, "gold": 60 }, "efficiencyPerLevel": 0.02 },
     "effects": {
       "mine_iron": { "timeMultiplier": 0.5 },
       "mine_copper": { "timeMultiplier": 0.5 },
       "mine_coal": { "timeMultiplier": 0.6 }
     }
   },
-
   "steel_furnace_upgrade": {
     "tier": 3,
     "name": "高效高温炉",
-    "cost": {
-      "steel_ingot": 15
-    },
+    "cost": { "steel_ingot": 15 },
+    "upgrade": { "maxLevel": 5, "costPerLevel": { "steel_ingot": 5, "gold": 60 }, "efficiencyPerLevel": 0.02 },
     "effects": {
       "smelt_iron": { "timeMultiplier": 0.6 },
       "smelt_copper": { "timeMultiplier": 0.6 },
       "smelt_steel": { "timeMultiplier": 0.7 }
     }
   },
-
   "steel_anvil": {
+    "tier": 3,
     "name": "钢铁锻造台",
-    "cost": {
-      "steel_ingot": 20
-    },
+    "cost": { "steel_ingot": 20 },
+    "upgrade": { "maxLevel": 5, "costPerLevel": { "steel_ingot": 5, "gold": 60 }, "efficiencyPerLevel": 0.02 },
     "effects": {
       "craft_iron_sword": { "timeMultiplier": 0.5 }
     }

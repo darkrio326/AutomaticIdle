@@ -47,13 +47,23 @@ const buildingItems = computed((): BuildingItem[] => {
   });
 });
 
+const buildingMessage = computed(() => {
+  const msg = flowStore.errorMessage || '';
+  return msg.startsWith('建筑') ? msg : '';
+});
+
+const buildingMessageIsSuccess = computed(() => {
+  const msg = buildingMessage.value;
+  return msg.includes('成功');
+});
+
 function formatCost(costs: Record<string, number>): string {
   return Object.entries(costs)
     .map(([resourceId, amount]) => {
       const name = flowStore.gameConfig.resources[resourceId]?.name ?? resourceId;
       return `${name} ×${amount}`;
     })
-    .join(' / ');
+    .join(' + ');
 }
 
 function handlePurchaseBuilding(buildingId: string): void {
@@ -113,6 +123,13 @@ function handlePurchaseBuilding(buildingId: string): void {
           {{ building.canPurchase ? '购买' : (building.reason ?? '资源不足') }}
         </button>
       </div>
+    </div>
+    <div
+      v-if="buildingMessage"
+      class="panel-message"
+      :class="{ 'panel-message-success': buildingMessageIsSuccess, 'panel-message-error': !buildingMessageIsSuccess }"
+    >
+      {{ buildingMessage }}
     </div>
   </section>
 </template>
@@ -261,5 +278,25 @@ function handlePurchaseBuilding(buildingId: string): void {
 
 .btn-purchase.btn-purchase-ready:hover:not(:disabled) {
   background: var(--text-success-dark, #388e3c);
+}
+
+.panel-message {
+  margin-top: 8px;
+  padding: 7px 10px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+
+.panel-message-success {
+  background: var(--emerald-bg);
+  color: var(--emerald);
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+.panel-message-error {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: rgba(248, 113, 113, 0.28);
 }
 </style>

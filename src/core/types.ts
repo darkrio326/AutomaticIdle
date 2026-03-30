@@ -62,6 +62,7 @@ export interface OrderTemplate {
   id: string;
   rarity: 'common' | 'uncommon' | 'rare';
   weight: number;
+  titlePool?: string[];
   requirementPool: Array<{ resourceId: string; min: number; max: number }>;
   rewardPool: Array<{ resourceId: string; min: number; max: number }>;
   durationSeconds: { min: number; max: number };
@@ -93,11 +94,18 @@ export interface ToolEffect {
   timeMultiplier: number;
 }
 
+export interface ToolUpgradeConfig {
+  maxLevel: number;
+  costPerLevel: Record<string, number>;
+  efficiencyPerLevel: number;
+}
+
 export interface ToolConfig {
   name: string;
   cost: Record<string, number>;
   effects: Record<string, ToolEffect>;
   tier?: number;
+  upgrade?: ToolUpgradeConfig;
 }
 
 export interface FlowStep {

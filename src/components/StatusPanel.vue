@@ -3,6 +3,7 @@ import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useFlowStore } from '@/stores/flowStore';
 import { useRuntimeStore } from '@/stores/runtimeStore';
 import { useOrderStore } from '@/stores/orderStore';
+import { useBuildingStore } from '@/stores/buildingStore';
 import type { ActiveOrder } from '@/core/types';
 import BuildingPanel from './BuildingPanel.vue';
 import ToolPanel from './ToolPanel.vue';
@@ -10,6 +11,7 @@ import ToolPanel from './ToolPanel.vue';
 const flowStore = useFlowStore();
 const runtimeStore = useRuntimeStore();
 const orderStore = useOrderStore();
+const buildingStore = useBuildingStore();
 
 const ordersExpanded = ref(true);
 
@@ -26,6 +28,16 @@ const slotInfos = computed(() =>
 const activeOrderCount = computed(() =>
   slotInfos.value.filter((s) => s.status === 'active').length
 );
+
+const orderMessage = computed(() => {
+  const msg = flowStore.errorMessage || '';
+  return msg.startsWith('订单') ? msg : '';
+});
+
+const orderMessageIsSuccess = computed(() => {
+  const msg = orderMessage.value;
+  return msg.includes('成功') || msg.includes('完成');
+});
 
 function canSubmitOrder(order: ActiveOrder): boolean {
   for (const req of order.requirements) {
@@ -44,13 +56,38 @@ function formatTime(ms: number): string {
   return `${s}s`;
 }
 
-/** 资源显示顺序 */
-const RESOURCE_ORDER = ['gold', 'iron_ore', 'iron_ingot', 'iron_sword'];
+/** 资源显示基础顺序 */
+const BASE_RESOURCE_ORDER = ['gold', 'iron_ore', 'iron_ingot', 'iron_sword'];
 
 const currentInventory = computed(() => {
   return (runtimeStore.isRunning || runtimeStore.isPaused)
     ? runtimeStore.liveInventory
     : flowStore.playerState.inventory;
+});
+
+const inventoryResourceIds = computed(() => {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  const pushId = (id: string) => {
+    if (!id || seen.has(id)) return;
+    if (!flowStore.gameConfig.resources[id]) return;
+    seen.add(id);
+    ids.push(id);
+  };
+
+  // 先保证核心资源顺序稳定
+  BASE_RESOURCE_ORDER.forEach(pushId);
+
+  // 建筑解锁的新资源即使当前为 0 也展示
+  buildingStore.getUnlockedResourceIds(flowStore.gameConfig).forEach(pushId);
+
+  // 库存里已出现过的其他资源也展示（兼容后续扩展）
+  Object.entries(currentInventory.value).forEach(([id, amount]) => {
+    if ((amount ?? 0) > 0) pushId(id);
+  });
+
+  return ids;
 });
 
 function calcActualRecipeTimeSeconds(recipeId: string): number {
@@ -112,7 +149,7 @@ const flowRateMap = computed(() => {
 const displayInventory = computed(() => {
   const inv = currentInventory.value;
   const isRuntimeActive = runtimeStore.isRunning || runtimeStore.isPaused;
-  return RESOURCE_ORDER.map((id) => ({
+  return inventoryResourceIds.value.map((id) => ({
     // 金币在运行中直接复用引擎 GPS，确保与中间「实时收益」一致。
     effectiveRate:
       id === 'gold' && isRuntimeActive
@@ -139,29 +176,12 @@ function formatRate(rate: number): string {
   return `${sign}${Math.abs(rate).toFixed(2)}/s`;
 }
 
-function formatCost(costs: Array<{ resourceId: string; amount: number }>): string {
-  return costs.map((c) => {
-    const name = flowStore.gameConfig.resources[c.resourceId]?.name ?? c.resourceId;
-    return `${name} ×${c.amount}`;
-  }).join(' / ');
-}
-
 function formatResources(items: Array<{ resourceId: string; amount: number }>): string {
   if (!items || items.length === 0) return '无';
   return items.map((x) => {
     const name = flowStore.gameConfig.resources[x.resourceId]?.name ?? x.resourceId;
     return `${name} ×${x.amount}`;
   }).join(' / ');
-}
-
-function formatUnlocks(items: Array<{ type: string; id: string }>): string {
-  if (!items || items.length === 0) return '';
-  return items.map((x) => {
-    if (x.type === 'recipe') {
-      return `解锁配方: ${flowStore.gameConfig.recipes[x.id]?.name ?? x.id}`;
-    }
-    return x.id;
-  }).join(', ');
 }
 </script>
 
@@ -252,8 +272,7 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
         <span class="toggle-arrow" :class="{ expanded: ordersExpanded }">›</span>
       </div>
       <div v-if="ordersExpanded" class="orders-list">
-        <p v-if="flowStore.errorMessage" class="msg-tip">{{ flowStore.errorMessage }}</p>
-        <div v-for="slot in slotInfos" :key="slot.slotIndex" class="order-slot">
+        <div v-for="(slot, slotIndex) in slotInfos" :key="slotIndex" class="order-slot">
           <!-- 冷却中 -->
           <div v-if="slot.status === 'cooldown'" class="order-slot-wait">
             <span class="slot-wait-icon">⏳</span>
@@ -272,7 +291,7 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
             </div>
             <div class="order-row"><span class="order-label">订单已过期</span></div>
             <div class="order-actions">
-              <button class="btn-order-discard" @click="flowStore.deleteOrder(slot.order.instanceId)">删除</button>
+              <button class="btn-order-discard" @click="flowStore.deleteOrder(slot.order.instanceId)">删除 -10🪙</button>
             </div>
           </div>
           <!-- 活跃订单 -->
@@ -302,9 +321,17 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
                 :disabled="!canSubmitOrder(slot.order)"
                 @click="flowStore.submitOrder(slot.order.instanceId)"
               >提交</button>
-              <button class="btn-order-discard" @click="flowStore.deleteOrder(slot.order.instanceId)">丢弃</button>
+              <button class="btn-order-refresh" @click="flowStore.refreshOrder(slot.order.instanceId)">刷新 -25🪙</button>
+              <button class="btn-order-discard" @click="flowStore.deleteOrder(slot.order.instanceId)">丢弃 -10🪙</button>
             </div>
           </div>
+        </div>
+        <div
+          v-if="orderMessage"
+          class="panel-message"
+          :class="{ 'panel-message-success': orderMessageIsSuccess, 'panel-message-error': !orderMessageIsSuccess }"
+        >
+          {{ orderMessage }}
         </div>
       </div>
     </section>
@@ -320,6 +347,7 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
   padding: 16px;
   gap: 0;
   min-height: 100%;
+  overflow-x: hidden;
 }
 
 /* ── 通用 section ── */
@@ -357,7 +385,7 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
 /* ── 库存网格 ── */
 .inv-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -370,6 +398,7 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  min-width: 0;
 }
 
 .inv-gold {
@@ -384,23 +413,28 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
 }
 
 .inv-amount {
-  font-size: 18px;
+  font-size: clamp(14px, 2.3vw, 18px);
   font-weight: 800;
   font-family: monospace;
   color: white;
   letter-spacing: -0.5px;
+  line-height: 1.1;
 }
 
 .inv-amount-row {
   display: flex;
   align-items: baseline;
   gap: 4px;
+  width: 100%;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .inv-rate {
   font-size: 10px;
   font-family: monospace;
   color: var(--text-dim);
+  white-space: nowrap;
 }
 
 .inv-rate-plus {
@@ -413,6 +447,12 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
 
 .inv-gold .inv-amount {
   color: var(--amber);
+}
+
+@media (max-width: 1260px) {
+  .inv-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── 技能 ── */
@@ -709,5 +749,42 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
 .btn-order-discard:hover {
   background: rgba(239, 68, 68, 0.18);
   color: #fee2e2;
+}
+
+.btn-order-refresh {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(251, 191, 36, 0.08);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-order-refresh:hover {
+  background: rgba(251, 191, 36, 0.18);
+  color: #fef3c7;
+}
+
+.panel-message {
+  margin-top: 4px;
+  padding: 7px 10px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+
+.panel-message-success {
+  background: var(--emerald-bg);
+  color: var(--emerald);
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+.panel-message-error {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: rgba(248, 113, 113, 0.28);
 }
 </style>

@@ -26,13 +26,6 @@ onMounted(() => {
 
 <template>
   <div class="app-layout">
-    <!-- 全局消息提示 -->
-    <Transition name="message-fade">
-      <div v-if="flowStore.errorMessage" class="global-message">
-        {{ flowStore.errorMessage }}
-      </div>
-    </Transition>
-
     <!-- 左：流程编辑区 -->
     <div class="panel panel-left">
       <FlowEditor />
@@ -78,32 +71,8 @@ onMounted(() => {
   flex-shrink: 0;
   border-left: 1px solid var(--border);
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* ── 全局消息提示 ── */
-.global-message {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 999;
-  background: var(--emerald);
-  color: white;
-  padding: 16px 32px;
-  border-radius: var(--r-lg);
-  font-size: 14px;
-  font-weight: 600;
-  box-shadow: 0 4px 16px rgba(52, 211, 153, 0.4);
-  pointer-events: none;
-}
-
-.message-fade-enter-active,
-.message-fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.message-fade-enter-from,
-.message-fade-leave-to {
-  opacity: 0;
-}
 </style>

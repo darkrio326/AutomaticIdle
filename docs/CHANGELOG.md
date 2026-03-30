@@ -10,10 +10,16 @@
 ## [Unreleased]
 
 ### 新增
+- [2026-03-30 +0800] 版本规划：新增 `docs/versions/v0.3-plan.md`，整理 v0.3 候选范围（必选/应选/观察项）、推荐切片（ITER-031 ~ ITER-037）、风险控制与候选门禁。
 - [2026-03-30 +0800] 更新根目录 `README.md`：补充"快速开始"命令、新增"v0.2 已实现功能"总表、Roadmap 从 Phase 列表改为版本状态表格（v0.1 ✅ / v0.2 ✅ / v0.3 🔜 / v1.0 💡）。
 - [2026-03-30 +0800] 新增 `docs/versions/v0.2-ANNOUNCEMENT.md`：玩家向的简版发布公告，说明各新功能与体验改善要点，附 v0.3 预告。
 
-### 变更
+### 变更- [2026-03-31 +0800] 新增功能 + 小修改（UI）：(1) **分隔符**：建筑/工具费用展示从"/"改为"+"。(2) **工具升级系统**：`tools.json` 各工具新增 `upgrade` 配置（`maxLevel=5`、`costPerLevel`、`efficiencyPerLevel`）；T1 工具每级提升 1% 效率，T2/T3 提升 2%；`types.ts` 添加 `ToolUpgradeConfig`；`toolStore.ts` 新增 `toolLevels` 状态、`canUpgradeTool`/`upgradeTool`/`restoreToolLevels` 方法；`runtimeEngine.ts` 在计算 timeMultiplier 时叠加升级等级加成；`runtimeTypes.ts` 添加 `toolLevels` 字段；`runtimeStore.ts` 在 `initEngine` 与 `syncPlayerStateFromFlowStore` 时同步 toolLevels 至引擎；`flowStore.ts` 新增 `upgradeTool` action 并在持久化/恢复时携带 toolLevels；`saveService.ts` 新增 `toolLevels` 存档字段；`ToolPanel.vue` 展示升级等级条、消耗与升级按钮。(3) **订单刷新**：活跃订单新增"刷新"按钮（消耗 25 金币），立即生成新订单；`orderStore.ts` 新增 `refreshOrder`，`flowStore.ts` 新增 `refreshOrder`。(4) **删除/丢弃订单需消耗金币**：删除（已过期）/丢弃（活跃）订单各扣 10 金币，不足时提示失败；按钮文案标注费用。- [2026-03-31 +0800] 小修改（UI）：修复右侧“资源库存”部分卡片在窄宽度下数字与速率文本被遮挡的问题。`StatusPanel.vue` 库存网格改为 `minmax(0, 1fr)`，卡片内容允许换行并自适应字号（`clamp`），在较窄视口下自动切为单列；`PlayPage.vue` 右侧面板补充 `overflow-x: hidden` 防止横向溢出裁切。
+- [2026-03-30 +0800] 小修改（UI + 订单）：移除 `PlayPage.vue` 全局悬浮提示，购买建筑/工具与订单提交提示改为显示在对应卡片区下方（建筑区、工具区、订单区）；`flowStore.ts` 统一提示前缀（建筑/工具/订单）并补充订单完成成功提示文案。同步扩展 `ordersTemplate.json`：新增更多订单模板（含铁剑需求订单），并为模板增加 `titlePool`，订单标题改为故事化随机文案；`orderStore.ts` 生成订单时优先使用故事化标题。
+- [2026-03-30 +0800] 小修改（bugfix）：修复“完成订单未增加金币”问题。原因是运行中订单奖励先写入 `flowStore.playerState`，随后被 runtime 的定时回写旧状态覆盖。修复：`runtimeStore.ts` 新增 `syncPlayerStateFromFlowStore()`，`flowStore.submitOrder()` 在结算需求/奖励后立即同步引擎库存，确保金币与资源增减即时生效且不会回退。
+- [2026-03-30 +0800] 小修改（UI）：`FlowEditor.vue` 新增上下分栏拖拽（split handle），流程步骤区与添加步骤区均改为独立滚动容器；支持动态调整两区高度并设置最小高度约束，避免任一区块被压缩到不可用。
+- [2026-03-30 +0800] 小修改（bugfix）：`StatusPanel.vue` 资源库存展示从固定 `RESOURCE_ORDER` 改为动态合并（基础顺序 + 建筑已解锁资源 + 库存已出现资源），修复购买建筑后新解锁资源未显示的问题（即使当前数量为 0 也展示）。
+- [2026-03-30 +0800] 小修改（UI）：`FlowEditor.vue` 流程步骤区补充滚动约束（`min-height: 0` + `step-card` 禁止压缩），修复步骤过多时卡片被挤压问题；同时将“添加步骤 + 自动运行状态”收口为底部固定操作区，长流程滚动时顶部模板区和底部操作区保持可用。
 - [2026-03-30 +0800] 文档同步：`docs/versions/v0.2-plan.md` 回填 v0.2 实际执行结果（ITER-022 ~ ITER-029 标记 DONE，ITER-030 标记 DEFERRED），新增 `docs/versions/v0.2-RELEASE.md` 发布说明与门禁结论。
 - [2026-03-30 +0800] 小修改（UI）：① `BuildingPanel.vue` / `ToolPanel.vue` 清理亮色降级变量，统一改用暗色主题已有变量（按钮、标签、已购态卡片），修复未购/已购卡片与按钮在暗色主题下发白、发灰、文字难以辨认的问题；② `ExecutionView.vue` / `FlowEditor.vue` 统一进度条主色为 `indigo`，并将 `< 1s` 快速配方进度条改为“整条填满 + 流动高光”样式；③ `PlayPage.vue` 新增居中的全局浮层消息，`flowStore.ts` 购买工具成功提示 2.5s 后自动消失；④ 同步刷新 `dist/` 构建产物。
 - [2026-03-30 +0800] 小修改（bugfix + UI）：① `buildingStore.ts` / `toolStore.ts` 修复 reason 文本中资源 ID 未本地化问题（如 `iron_ingot 不足` → `铁锭 不足`），改为使用 `gameConfig.resources?.[id]?.name`；② `BuildingPanel.vue` 修复未购建筑卡片 `building-disabled(0.5)` 与按钮 `:disabled(0.5)` 叠加导致按钮近乎不可见（合成约 0.25 透明度）的问题，改为卡片 opacity 0.65，移除按钮额外 opacity；③ `StatusPanel.vue` 订单模块默认改为展开（`ref(false)` → `ref(true)`）并统一标题为 `div.section-header`，移除残留 `button` 包裹。— commit c87bf29

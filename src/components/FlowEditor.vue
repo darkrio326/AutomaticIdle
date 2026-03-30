@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import type { RecipeConfig } from '@/core/types';
 import { useFlowStore } from '@/stores/flowStore';
 import { useRuntimeStore } from '@/stores/runtimeStore';
@@ -19,6 +19,65 @@ onMounted(() => {
 const showSaveInput = ref(false);
 const newTemplateName = ref('');
 const selectedTemplateId = ref('');
+
+// ── 编辑区上下分栏（步骤区 / 添加步骤区） ──
+const editorMainRef = ref<HTMLElement | null>(null);
+const splitRatio = ref(0.62);
+let draggingSplit = false;
+const SPLIT_MIN_TOP = 180;
+const SPLIT_MIN_BOTTOM = 170;
+const SPLIT_HANDLE_HEIGHT = 10;
+
+function clampSplitRatio(ratio: number): number {
+  if (!editorMainRef.value) return Math.min(0.8, Math.max(0.35, ratio));
+  const total = editorMainRef.value.clientHeight;
+  const usable = Math.max(1, total - SPLIT_HANDLE_HEIGHT);
+  const minRatio = Math.min(0.85, SPLIT_MIN_TOP / usable);
+  const maxRatio = Math.max(0.15, 1 - SPLIT_MIN_BOTTOM / usable);
+  return Math.min(maxRatio, Math.max(minRatio, ratio));
+}
+
+function updateSplitByClientY(clientY: number): void {
+  const el = editorMainRef.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const total = rect.height;
+  const usable = Math.max(1, total - SPLIT_HANDLE_HEIGHT);
+  const rawTop = clientY - rect.top;
+  const minTop = Math.min(SPLIT_MIN_TOP, usable - 1);
+  const maxTop = Math.max(minTop, usable - SPLIT_MIN_BOTTOM);
+  const top = Math.min(maxTop, Math.max(minTop, rawTop));
+  splitRatio.value = clampSplitRatio(top / usable);
+}
+
+function onSplitMouseMove(event: MouseEvent): void {
+  if (!draggingSplit) return;
+  event.preventDefault();
+  updateSplitByClientY(event.clientY);
+}
+
+function onSplitMouseUp(): void {
+  if (!draggingSplit) return;
+  draggingSplit = false;
+  window.removeEventListener('mousemove', onSplitMouseMove);
+  window.removeEventListener('mouseup', onSplitMouseUp);
+}
+
+function onSplitMouseDown(event: MouseEvent): void {
+  event.preventDefault();
+  draggingSplit = true;
+  updateSplitByClientY(event.clientY);
+  window.addEventListener('mousemove', onSplitMouseMove);
+  window.addEventListener('mouseup', onSplitMouseUp);
+}
+
+const stepListStyle = computed(() => ({
+  flexBasis: `${Math.round(clampSplitRatio(splitRatio.value) * 100)}%`,
+}));
+
+const addAreaStyle = computed(() => ({
+  flexBasis: `${Math.round((1 - clampSplitRatio(splitRatio.value)) * 100)}%`,
+}));
 
 function onSaveTemplate(): void {
   if (!newTemplateName.value.trim()) return;
@@ -81,6 +140,13 @@ function onRemoveStep(uid: number): void {
   runtimeStore.notifyFlowChanged();
 }
 
+function onClearSteps(): void {
+  if (flowStore.steps.length === 0) return;
+  if (!window.confirm('确定清空所有步骤吗？')) return;
+  flowStore.replaceSteps([]);
+  runtimeStore.notifyFlowChanged();
+}
+
 function onRepeatDec(uid: number, current: number): void {
   if (current <= 1) return;
   flowStore.updateStepRepeat(uid, current - 1);
@@ -125,6 +191,10 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
   if (totalGold <= 0) return '无';
   return `${totalGold} 金币/次`;
 }
+
+onUnmounted(() => {
+  onSplitMouseUp();
+});
 </script>
 
 <template>
@@ -132,7 +202,15 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
     <!-- 标题栏 -->
     <div class="flow-header">
       <h2 class="flow-title">流程编辑区</h2>
-      <span class="badge-auto">自动循环</span>
+      <div class="flow-header-actions">
+        <span class="badge-auto">自动循环</span>
+        <button
+          class="btn-clear-steps"
+          :disabled="flowStore.steps.length === 0"
+          title="清空所有步骤"
+          @click="onClearSteps"
+        >清空</button>
+      </div>
     </div>
 
     <!-- 离线消息弹窗 -->
@@ -192,126 +270,136 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
       </div>
     </div>
 
-    <!-- 步骤列表 -->
-    <div class="step-list">
-      <div
-        v-for="(step, index) in flowStore.steps"
-        :key="step.uid"
-        class="step-card"
-        :class="{ 'step-active': (runtimeStore.isRunning || runtimeStore.isPaused) && runtimeStore.stepIndex === index }"
-      >
-        <!-- 激活标识条 -->
-        <div v-if="(runtimeStore.isRunning || runtimeStore.isPaused) && runtimeStore.stepIndex === index" class="active-bar"></div>
+    <div ref="editorMainRef" class="editor-main">
+      <!-- 步骤列表 -->
+      <div class="step-list" :style="stepListStyle">
+        <div
+          v-for="(step, index) in flowStore.steps"
+          :key="step.uid"
+          class="step-card"
+          :class="{ 'step-active': (runtimeStore.isRunning || runtimeStore.isPaused) && runtimeStore.stepIndex === index }"
+        >
+          <!-- 激活标识条 -->
+          <div v-if="(runtimeStore.isRunning || runtimeStore.isPaused) && runtimeStore.stepIndex === index" class="active-bar"></div>
 
-        <!-- 顶部行：配方标签 + 时间 + 配方选择 + 删除 -->
-        <div class="step-top">
-          <div class="step-info">
-            <span class="recipe-badge" :class="`cat-${getRecipeCategory(step.recipeId)}`">
-              {{ getRecipeName(step.recipeId) }}
-            </span>
-            <span class="step-time">{{ getRecipeTime(step.recipeId) }}s</span>
+          <!-- 顶部行：配方标签 + 时间 + 配方选择 + 删除 -->
+          <div class="step-top">
+            <div class="step-info">
+              <span class="recipe-badge" :class="`cat-${getRecipeCategory(step.recipeId)}`">
+                {{ getRecipeName(step.recipeId) }}
+              </span>
+              <span class="step-time">{{ getRecipeTime(step.recipeId) }}s</span>
+            </div>
+            <div class="step-actions">
+              <button class="btn-icon btn-danger" @click="onRemoveStep(step.uid)" title="删除">✕</button>
+            </div>
           </div>
-          <div class="step-actions">
-            <button class="btn-icon btn-danger" @click="onRemoveStep(step.uid)" title="删除">✕</button>
+
+          <!-- 底部行：循环次数 -->
+          <div class="step-bottom">
+            <div class="repeat-control">
+              <span class="repeat-label">循环次数:</span>
+              <div class="repeat-counter">
+                <button class="repeat-btn" :disabled="step.repeat <= 1" @click="onRepeatDec(step.uid, step.repeat)">−</button>
+                <span class="repeat-value">{{ step.repeat }}</span>
+                <button class="repeat-btn" @click="onRepeatInc(step.uid, step.repeat)">+</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 进度条（仅当前执行步骤） -->
+          <div v-if="(runtimeStore.isRunning || runtimeStore.isPaused) && runtimeStore.stepIndex === index" class="step-progress">
+            <div class="step-progress-fill" :style="{ width: stepProgressPercent(index) + '%' }"></div>
           </div>
         </div>
 
-        <!-- 底部行：循环次数 -->
-        <div class="step-bottom">
-          <div class="repeat-control">
-            <span class="repeat-label">循环次数:</span>
-            <div class="repeat-counter">
-              <button class="repeat-btn" :disabled="step.repeat <= 1" @click="onRepeatDec(step.uid, step.repeat)">−</button>
-              <span class="repeat-value">{{ step.repeat }}</span>
-              <button class="repeat-btn" @click="onRepeatInc(step.uid, step.repeat)">+</button>
+        <div v-if="flowStore.steps.length === 0" class="empty-steps">
+          流程为空，系统停机
+        </div>
+      </div>
+
+      <div class="split-handle" @mousedown="onSplitMouseDown" title="拖拽调整上下区块高度">
+        <span class="split-handle-dot"></span>
+      </div>
+
+      <div class="editor-footer" :style="addAreaStyle">
+        <div class="add-step-scroll">
+          <!-- 添加步骤 -->
+          <div class="add-step-area">
+            <h3 class="section-label">添加步骤</h3>
+
+            <div class="recipe-group" v-if="gatherRecipes.length > 0">
+              <div class="recipe-group-head">采集</div>
+              <div class="recipe-buttons">
+                <button
+                  v-for="recipe in gatherRecipes"
+                  :key="recipe.id"
+                  class="btn-add-recipe"
+                  @click="addStepWithRecipe(recipe.id)"
+                >
+                  + {{ recipe.name }}
+                  <span class="recipe-tooltip">
+                    <span class="tip-title">{{ recipe.name }}</span>
+                    <span class="tip-line"><span class="tip-label">消耗</span><span>{{ formatResourceList(recipe.inputs) }}</span></span>
+                    <span class="tip-line"><span class="tip-label">产出</span><span>{{ formatResourceList(recipe.outputs) }}</span></span>
+                    <span class="tip-line"><span class="tip-label">卖价</span><span>{{ getRecipeSellValue(recipe) }}</span></span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div class="recipe-group" v-if="craftRecipes.length > 0">
+              <div class="recipe-group-head">加工</div>
+              <div class="recipe-buttons">
+                <button
+                  v-for="recipe in craftRecipes"
+                  :key="recipe.id"
+                  class="btn-add-recipe"
+                  @click="addStepWithRecipe(recipe.id)"
+                >
+                  + {{ recipe.name }}
+                  <span class="recipe-tooltip">
+                    <span class="tip-title">{{ recipe.name }}</span>
+                    <span class="tip-line"><span class="tip-label">消耗</span><span>{{ formatResourceList(recipe.inputs) }}</span></span>
+                    <span class="tip-line"><span class="tip-label">产出</span><span>{{ formatResourceList(recipe.outputs) }}</span></span>
+                    <span class="tip-line"><span class="tip-label">卖价</span><span>{{ getRecipeSellValue(recipe) }}</span></span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div class="recipe-group" v-if="sellRecipes.length > 0">
+              <div class="recipe-group-head">出售</div>
+              <div class="recipe-buttons">
+                <button
+                  v-for="recipe in sellRecipes"
+                  :key="recipe.id"
+                  class="btn-add-recipe"
+                  @click="addStepWithRecipe(recipe.id)"
+                >
+                  + {{ recipe.name }}
+                  <span class="recipe-tooltip">
+                    <span class="tip-title">{{ recipe.name }}</span>
+                    <span class="tip-line"><span class="tip-label">消耗</span><span>{{ formatResourceList(recipe.inputs) }}</span></span>
+                    <span class="tip-line"><span class="tip-label">产出</span><span>{{ formatResourceList(recipe.outputs) }}</span></span>
+                    <span class="tip-line"><span class="tip-label">卖价</span><span>{{ getRecipeSellValue(recipe) }}</span></span>
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- 进度条（仅当前执行步骤） -->
-        <div v-if="(runtimeStore.isRunning || runtimeStore.isPaused) && runtimeStore.stepIndex === index" class="step-progress">
-          <div class="step-progress-fill" :style="{ width: stepProgressPercent(index) + '%' }"></div>
+        <!-- 自动运行状态 -->
+        <div class="run-state">
+          <div v-if="runtimeStore.isRunning" class="run-state-ok">✓ 自动运行中</div>
+          <div v-else-if="runtimeStore.isPaused" class="run-state-pause">⏸ 已暂停（页面整体）</div>
+          <div v-else-if="flowStore.steps.length === 0" class="run-state-warn">流程为空，系统停机</div>
+          <div v-else class="run-state-warn">资源不足，系统停机</div>
+          <div v-if="runtimeStore.isRunning || runtimeStore.isPaused || runtimeStore.loopCount > 0" class="loop-count">
+            已循环 {{ runtimeStore.loopCount }} 次
+          </div>
         </div>
-      </div>
-
-      <div v-if="flowStore.steps.length === 0" class="empty-steps">
-        流程为空，系统停机
-      </div>
-    </div>
-
-    <!-- 添加步骤 -->
-    <div class="add-step-area">
-      <h3 class="section-label">添加步骤</h3>
-
-      <div class="recipe-group" v-if="gatherRecipes.length > 0">
-        <div class="recipe-group-head">采集</div>
-        <div class="recipe-buttons">
-          <button
-            v-for="recipe in gatherRecipes"
-            :key="recipe.id"
-            class="btn-add-recipe"
-            @click="addStepWithRecipe(recipe.id)"
-          >
-            + {{ recipe.name }}
-            <span class="recipe-tooltip">
-              <span class="tip-title">{{ recipe.name }}</span>
-              <span class="tip-line"><span class="tip-label">消耗</span><span>{{ formatResourceList(recipe.inputs) }}</span></span>
-              <span class="tip-line"><span class="tip-label">产出</span><span>{{ formatResourceList(recipe.outputs) }}</span></span>
-              <span class="tip-line"><span class="tip-label">卖价</span><span>{{ getRecipeSellValue(recipe) }}</span></span>
-            </span>
-          </button>
-        </div>
-      </div>
-
-      <div class="recipe-group" v-if="craftRecipes.length > 0">
-        <div class="recipe-group-head">加工</div>
-        <div class="recipe-buttons">
-          <button
-            v-for="recipe in craftRecipes"
-            :key="recipe.id"
-            class="btn-add-recipe"
-            @click="addStepWithRecipe(recipe.id)"
-          >
-            + {{ recipe.name }}
-            <span class="recipe-tooltip">
-              <span class="tip-title">{{ recipe.name }}</span>
-              <span class="tip-line"><span class="tip-label">消耗</span><span>{{ formatResourceList(recipe.inputs) }}</span></span>
-              <span class="tip-line"><span class="tip-label">产出</span><span>{{ formatResourceList(recipe.outputs) }}</span></span>
-              <span class="tip-line"><span class="tip-label">卖价</span><span>{{ getRecipeSellValue(recipe) }}</span></span>
-            </span>
-          </button>
-        </div>
-      </div>
-
-      <div class="recipe-group" v-if="sellRecipes.length > 0">
-        <div class="recipe-group-head">出售</div>
-        <div class="recipe-buttons">
-          <button
-            v-for="recipe in sellRecipes"
-            :key="recipe.id"
-            class="btn-add-recipe"
-            @click="addStepWithRecipe(recipe.id)"
-          >
-            + {{ recipe.name }}
-            <span class="recipe-tooltip">
-              <span class="tip-title">{{ recipe.name }}</span>
-              <span class="tip-line"><span class="tip-label">消耗</span><span>{{ formatResourceList(recipe.inputs) }}</span></span>
-              <span class="tip-line"><span class="tip-label">产出</span><span>{{ formatResourceList(recipe.outputs) }}</span></span>
-              <span class="tip-line"><span class="tip-label">卖价</span><span>{{ getRecipeSellValue(recipe) }}</span></span>
-            </span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 自动运行状态 -->
-    <div class="run-state">
-      <div v-if="runtimeStore.isRunning" class="run-state-ok">✓ 自动运行中</div>
-      <div v-else-if="runtimeStore.isPaused" class="run-state-pause">⏸ 已暂停（页面整体）</div>
-      <div v-else-if="flowStore.steps.length === 0" class="run-state-warn">流程为空，系统停机</div>
-      <div v-else class="run-state-warn">资源不足，系统停机</div>
-      <div v-if="runtimeStore.isRunning || runtimeStore.isPaused || runtimeStore.loopCount > 0" class="loop-count">
-        已循环 {{ runtimeStore.loopCount }} 次
       </div>
     </div>
   </div>
@@ -322,9 +410,17 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   background: var(--bg-panel);
   padding: 16px;
   overflow: hidden;
+}
+
+.editor-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 标题栏 */
@@ -344,6 +440,12 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
   color: var(--text);
 }
 
+.flow-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .badge-auto {
   font-size: 10px;
   background: var(--bg-card);
@@ -351,6 +453,26 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
   border: 1px solid var(--border);
   border-radius: var(--r-full);
   padding: 2px 8px;
+}
+
+.btn-clear-steps {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.btn-clear-steps:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border-color: #ef4444;
+}
+.btn-clear-steps:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* 离线消息（已弃用，改为 modal） */
@@ -406,16 +528,18 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
 
 /* 步骤列表 */
 .step-list {
-  flex: 1;
+  flex: 0 0 auto;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding-right: 2px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .step-card {
+  flex-shrink: 0;
   position: relative;
   background: var(--bg-card-50);
   border: 1px solid var(--border-50);
@@ -589,12 +713,53 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
   border-radius: var(--r-lg);
 }
 
+.editor-footer {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.98) 12%, rgba(15, 23, 42, 1) 100%);
+  border-top: 1px solid var(--border);
+  margin: 0 -16px;
+  padding: 10px 16px 10px;
+}
+
+.split-handle {
+  height: 10px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px -8px;
+}
+
+.split-handle-dot {
+  width: 54px;
+  height: 4px;
+  border-radius: var(--r-full);
+  background: rgba(148, 163, 184, 0.4);
+  box-shadow: 0 0 0 1px rgba(51, 65, 85, 0.5) inset;
+}
+
+.split-handle:hover .split-handle-dot {
+  background: rgba(99, 102, 241, 0.55);
+}
+
 /* 添加步骤区 */
 .add-step-area {
   flex-shrink: 0;
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-  margin-bottom: 12px;
+  border-top: none;
+  padding-top: 0;
+  margin-bottom: 8px;
+}
+
+.add-step-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .recipe-group {

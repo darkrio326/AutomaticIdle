@@ -11,6 +11,7 @@ import { loadSaveSnapshot, saveSnapshot } from '@/services/saveService';
 import { useBuildingStore } from './buildingStore';
 import { useToolStore } from './toolStore';
 import { useOrderStore } from './orderStore';
+import { useRuntimeStore } from './runtimeStore';
 import type {
   FlowDefinition,
   FlowStep,
@@ -164,11 +165,13 @@ function calcDisplayRecipeTimeSeconds(
     }
   }
 
-  // 计算工具加速（只取最高 tier 工具）
+  // 计算工具加速（只取最高 tier 工具，叠加升级等级）
   let toolMultiplier = 1;
   const bestTool = toolStore.getHighestTierToolForRecipe(recipe.id, gameConfig);
   if (bestTool) {
-    toolMultiplier = bestTool.timeMultiplier;
+    const upgradeLevel = toolStore.toolLevels[bestTool.toolId] ?? 0;
+    const effPerLevel = gameConfig.tools?.[bestTool.toolId]?.upgrade?.efficiencyPerLevel ?? 0;
+    toolMultiplier = Math.max(0.1, bestTool.timeMultiplier - upgradeLevel * effPerLevel);
   }
 
   return Math.max(0, recipe.timeSeconds * skillMultiplier * toolMultiplier);
@@ -208,6 +211,20 @@ function buildInitialPlayerState(): PlayerState {
 }
 
 let stepUidSeed = 1;
+let uiMessageTimer: ReturnType<typeof setTimeout> | null = null;
+
+function pushUiMessage(target: { errorMessage: string }, message: string, ttlMs = 2500): void {
+  target.errorMessage = message;
+  if (uiMessageTimer) {
+    clearTimeout(uiMessageTimer);
+    uiMessageTimer = null;
+  }
+  uiMessageTimer = setTimeout(() => {
+    if (target.errorMessage === message) {
+      target.errorMessage = '';
+    }
+  }, ttlMs);
+}
 
 function buildInitialState() {
   const gameConfig = buildGameConfig();
@@ -454,6 +471,7 @@ export const useFlowStore = defineStore('flow', {
         unlockedRecipeIds,
         purchasedBuildingIds: buildingStore.getPurchasedBuildingIds,
         purchasedToolIds: toolStore.getPurchasedToolIds,
+        toolLevels: { ...toolStore.toolLevels },
         orderSlots: orderStore.getSnapshotSlots,
         lastSavedAt: Date.now(),
       });
@@ -538,15 +556,16 @@ export const useFlowStore = defineStore('flow', {
     },
     submitOrder(instanceId: string): void {
       const orderStore = useOrderStore();
+      const runtimeStore = useRuntimeStore();
       const order = orderStore.getOrderByInstanceId(instanceId);
       if (!order) {
-        this.errorMessage = '订单不存在或已过期';
+        pushUiMessage(this, '订单提交失败：订单不存在或已过期', 3000);
         return;
       }
 
       const check = canSubmitOrderRequirements(this.playerState.inventory, order.requirements);
       if (!check.ok) {
-        this.errorMessage = check.reason ?? '资源不足，无法提交订单';
+        pushUiMessage(this, `订单提交失败：${check.reason ?? '资源不足，无法提交订单'}`, 3000);
         return;
       }
 
@@ -560,13 +579,51 @@ export const useFlowStore = defineStore('flow', {
           (this.playerState.inventory[reward.resourceId] ?? 0) + reward.amount;
       }
 
+      // 运行中提交订单时，立刻把结算后的库存同步到引擎，避免被旧 runtime 状态回写覆盖。
+      runtimeStore.syncPlayerStateFromFlowStore();
+
+      const rewardText = order.rewards
+        .map((r) => `${this.gameConfig.resources[r.resourceId]?.name ?? r.resourceId} +${r.amount}`)
+        .join(' / ');
+      pushUiMessage(this, `订单完成：${order.name}（奖励：${rewardText}）`, 3000);
+
       orderStore.completeOrder(instanceId);
       this.persistState();
     },
 
     deleteOrder(instanceId: string): void {
+      const DELETE_COST = 10;
+      const gold = this.playerState.inventory['gold'] ?? 0;
+      if (gold < DELETE_COST) {
+        pushUiMessage(this, `订单删除失败：金币不足（需 ${DELETE_COST}，有 ${gold}）`, 3000);
+        return;
+      }
       const orderStore = useOrderStore();
+      this.playerState.inventory['gold'] = (this.playerState.inventory['gold'] ?? 0) - DELETE_COST;
+      const runtimeStore = useRuntimeStore();
+      runtimeStore.syncPlayerStateFromFlowStore();
       orderStore.deleteOrder(instanceId);
+      this.persistState();
+    },
+
+    refreshOrder(instanceId: string): void {
+      const REFRESH_COST = 25;
+      const gold = this.playerState.inventory['gold'] ?? 0;
+      if (gold < REFRESH_COST) {
+        pushUiMessage(this, `订单刷新失败：金币不足（需 ${REFRESH_COST}，有 ${gold}）`, 3000);
+        return;
+      }
+      const orderStore = useOrderStore();
+      const slotIndex = orderStore.slots.findIndex((s) => s.order?.instanceId === instanceId);
+      if (slotIndex === -1) {
+        pushUiMessage(this, '订单刷新失败：订单不存在', 2000);
+        return;
+      }
+      this.playerState.inventory['gold'] = (this.playerState.inventory['gold'] ?? 0) - REFRESH_COST;
+      const runtimeStore = useRuntimeStore();
+      runtimeStore.syncPlayerStateFromFlowStore();
+      orderStore.refreshOrder(instanceId, this.gameConfig);
+      pushUiMessage(this, `已刷新订单（消耗 ${REFRESH_COST} 金币）`, 2000);
       this.persistState();
     },
 
@@ -598,13 +655,13 @@ export const useFlowStore = defineStore('flow', {
 
       const check = buildingStore.canPurchaseBuilding(buildingId, this.playerState, this.gameConfig);
       if (!check.canBuy) {
-        this.errorMessage = check.reason ?? '无法购买此建筑';
+        pushUiMessage(this, `建筑购买失败：${check.reason ?? '无法购买此建筑'}`, 3000);
         return;
       }
 
       const result = buildingStore.purchaseBuilding(buildingId, this.playerState, this.gameConfig);
       if (!result.success) {
-        this.errorMessage = result.reason ?? '购买失败';
+        pushUiMessage(this, `建筑购买失败：${result.reason ?? '购买失败'}`, 3000);
         return;
       }
 
@@ -617,6 +674,8 @@ export const useFlowStore = defineStore('flow', {
           }
         }
       }
+
+      pushUiMessage(this, `建筑购买成功：${building?.name ?? buildingId}`, 3000);
 
       this.persistState();
     },
@@ -641,6 +700,9 @@ export const useFlowStore = defineStore('flow', {
         // 同步回 playerState，确保引擎和离线结算能正确读取工具加速
         this.playerState.purchasedTools = new Set<string>(snapshot.purchasedToolIds);
       }
+      if (snapshot?.toolLevels) {
+        toolStore.restoreToolLevels(snapshot.toolLevels);
+      }
     },
 
     /**
@@ -652,13 +714,13 @@ export const useFlowStore = defineStore('flow', {
 
       const check = toolStore.canPurchaseTool(toolId, this.playerState, this.gameConfig);
       if (!check.canBuy) {
-        this.errorMessage = check.reason ?? '无法购买此工具';
+        pushUiMessage(this, `工具购买失败：${check.reason ?? '无法购买此工具'}`, 3000);
         return;
       }
 
       const result = toolStore.purchaseTool(toolId, this.playerState, this.gameConfig);
       if (!result.success) {
-        this.errorMessage = result.reason ?? '购买失败';
+        pushUiMessage(this, `工具购买失败：${result.reason ?? '购买失败'}`, 3000);
         return;
       }
 
@@ -668,13 +730,8 @@ export const useFlowStore = defineStore('flow', {
       }
       this.playerState.purchasedTools.add(toolId);
 
-      this.errorMessage = `购买成功：${this.gameConfig.tools?.[toolId]?.name ?? toolId}`;
+      pushUiMessage(this, `工具购买成功：${this.gameConfig.tools?.[toolId]?.name ?? toolId}`, 3000);
       this.persistState();
-
-      // 2.5 秒后自动清除消息
-      setTimeout(() => {
-        this.errorMessage = '';
-      }, 2500);
     },
 
     /**
@@ -683,6 +740,33 @@ export const useFlowStore = defineStore('flow', {
     clearPurchasedTools(): void {
       const toolStore = useToolStore();
       toolStore.clearPurchasedTools();
+      this.persistState();
+    },
+
+    /**
+     * 升级工具
+     */
+    upgradeTool(toolId: string): void {
+      const toolStore = useToolStore();
+      const runtimeStore = useRuntimeStore();
+
+      const check = toolStore.canUpgradeTool(toolId, this.playerState, this.gameConfig);
+      if (!check.canUpgrade) {
+        pushUiMessage(this, `工具升级失败：${check.reason ?? '无法升级此工具'}`, 3000);
+        return;
+      }
+
+      const result = toolStore.upgradeTool(toolId, this.playerState, this.gameConfig);
+      if (!result.success) {
+        pushUiMessage(this, `工具升级失败：${result.reason ?? '升级失败'}`, 3000);
+        return;
+      }
+
+      runtimeStore.syncPlayerStateFromFlowStore();
+      const toolName = this.gameConfig.tools?.[toolId]?.name ?? toolId;
+      const newLevel = toolStore.toolLevels[toolId] ?? 1;
+      const maxLevel = this.gameConfig.tools?.[toolId]?.upgrade?.maxLevel ?? 5;
+      pushUiMessage(this, `工具升级成功：${toolName} Lv.${newLevel}/${maxLevel}`, 3000);
       this.persistState();
     },
   },

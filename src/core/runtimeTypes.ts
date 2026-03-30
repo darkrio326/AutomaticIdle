@@ -48,6 +48,9 @@ export interface RuntimeState {
   /** 运行时维护的玩家状态，隔离于 flowStore 的编辑态；引擎结算后回写 flowStore */
   playerState: PlayerState;
 
+  /** 工具升级等级（toolId → 当前等级），供引擎计算效率加成使用 */
+  toolLevels: Record<string, number>;
+
   // ── 统计摘要 ──────────────────────────────────────────────
   /** 实时每秒金币收益（5s 滑动窗口估算）*/
   gps: number;
@@ -72,6 +75,7 @@ export function createInitialRuntimeState(
     loopCount: 0,
     currentRepeatTotalMs: 0,
     playerState,
+    toolLevels: {},
     gps: 0,
     goldInWindow: 0,
     gpsWindowMs: 0,

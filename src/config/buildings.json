@@ -1,7 +1,7 @@
 {
   "blacksmith_shop": {
     "name": "铁匠铺",
-    "cost": { "iron_ingot": 10 },
+    "cost": { "gold": 80, "iron_ingot": 10 },
     "unlock": {
       "resources": ["iron_sword"],
       "recipes": ["craft_iron_sword", "sell_iron_sword"]
@@ -9,7 +9,7 @@
   },
   "copper_mine": {
     "name": "浅层矿井",
-    "cost": { "iron_ingot": 40 },
+    "cost": { "gold": 150, "iron_ingot": 40 },
     "unlock": {
       "resources": ["copper_ore"],
       "recipes": ["mine_copper", "smelt_copper"]
@@ -17,7 +17,7 @@
   },
   "coal_mine": {
     "name": "煤矿井",
-    "cost": { "iron_ingot": 60, "copper_ore": 20 },
+    "cost": { "gold": 200, "iron_ingot": 60, "copper_ore": 20 },
     "unlock": {
       "resources": ["coal_ore"],
       "recipes": ["mine_coal"]
@@ -25,7 +25,7 @@
   },
   "steel_furnace": {
     "name": "高温炉",
-    "cost": { "iron_ingot": 80, "copper_ingot": 40 },
+    "cost": { "gold": 350, "iron_ingot": 80, "copper_ingot": 40 },
     "unlock": {
       "recipes": ["smelt_steel"]
     }
