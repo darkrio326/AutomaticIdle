@@ -9,6 +9,10 @@
 
 ## [Unreleased]
 
+### 新增
+- [2026-03-30 +0800] 更新根目录 `README.md`：补充"快速开始"命令、新增"v0.2 已实现功能"总表、Roadmap 从 Phase 列表改为版本状态表格（v0.1 ✅ / v0.2 ✅ / v0.3 🔜 / v1.0 💡）。
+- [2026-03-30 +0800] 新增 `docs/versions/v0.2-ANNOUNCEMENT.md`：玩家向的简版发布公告，说明各新功能与体验改善要点，附 v0.3 预告。
+
 ### 变更
 - [2026-03-30 +0800] 文档同步：`docs/versions/v0.2-plan.md` 回填 v0.2 实际执行结果（ITER-022 ~ ITER-029 标记 DONE，ITER-030 标记 DEFERRED），新增 `docs/versions/v0.2-RELEASE.md` 发布说明与门禁结论。
 - [2026-03-30 +0800] 小修改（UI）：① `BuildingPanel.vue` / `ToolPanel.vue` 清理亮色降级变量，统一改用暗色主题已有变量（按钮、标签、已购态卡片），修复未购/已购卡片与按钮在暗色主题下发白、发灰、文字难以辨认的问题；② `ExecutionView.vue` / `FlowEditor.vue` 统一进度条主色为 `indigo`，并将 `< 1s` 快速配方进度条改为“整条填满 + 流动高光”样式；③ `PlayPage.vue` 新增居中的全局浮层消息，`flowStore.ts` 购买工具成功提示 2.5s 后自动消失；④ 同步刷新 `dist/` 构建产物。
