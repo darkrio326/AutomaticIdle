@@ -573,7 +573,7 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
 
 .step-progress-fill {
   height: 100%;
-  background: linear-gradient(to right, var(--indigo), var(--cyan));
+  background: var(--indigo);
   border-radius: var(--r-full);
   transition: width 0.1s linear;
   box-shadow: 0 0 6px var(--indigo-glow);

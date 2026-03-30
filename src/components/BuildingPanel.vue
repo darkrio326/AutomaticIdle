@@ -67,7 +67,6 @@ function handlePurchaseBuilding(buildingId: string): void {
       <span class="section-icon">🏛️</span>
       <h3 class="section-title">建筑系统</h3>
     </div>
-    <p v-if="flowStore.errorMessage" class="msg-error">{{ flowStore.errorMessage }}</p>
     <div class="buildings-list">
       <div
         v-for="building in buildingItems"
@@ -172,14 +171,13 @@ function handlePurchaseBuilding(buildingId: string): void {
 }
 
 .building-card.building-purchased {
-  background: var(--bg-success, #e8f5e9);
-  border-color: var(--border-success, #81c784);
-  opacity: 0.7;
+  background: var(--emerald-bg);
+  border-color: var(--emerald);
+  opacity: 1;
 }
 
 .building-card.building-disabled {
-  opacity: 0.65;
-  background: var(--bg-disabled, #f5f5f5);
+  border-color: var(--border-50);
 }
 
 .building-header {
@@ -229,8 +227,8 @@ function handlePurchaseBuilding(buildingId: string): void {
 
 .unlock-item {
   font-size: 10px;
-  background: var(--bg-tag, #e3f2fd);
-  color: var(--text-tag, #1976d2);
+  background: var(--indigo-bg);
+  color: var(--indigo);
   padding: 2px 6px;
   border-radius: 3px;
   white-space: nowrap;
@@ -243,15 +241,15 @@ function handlePurchaseBuilding(buildingId: string): void {
   font-size: 11px;
   font-weight: 500;
   border: 1px solid var(--border);
-  background: var(--bg-button, #f5f5f5);
-  color: var(--text-secondary);
+  background: var(--bg-card-50);
+  color: var(--text-dim);
   border-radius: 4px;
   cursor: not-allowed;
   transition: all 0.2s;
 }
 
 .btn-purchase:disabled {
-  opacity: 1;
+  opacity: 0.75;
 }
 
 .btn-purchase.btn-purchase-ready {

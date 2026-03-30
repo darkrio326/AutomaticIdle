@@ -468,7 +468,7 @@ function formatResourceAmount(resourceId: string, amount: number): string {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(to right, var(--indigo), var(--cyan));
+  background: var(--indigo);
   border-radius: var(--r-full);
   transition: width 0.08s linear;
   box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
@@ -476,17 +476,22 @@ function formatResourceAmount(resourceId: string, amount: number): string {
 
 /* 快速配方扫描条（< 1s）*/
 .progress-fill--sweep {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 28%;
+  width: 100%;
   height: 100%;
-  transition: none;
-  animation: progress-sweep 0.7s linear infinite;
+  background: linear-gradient(
+    90deg,
+    var(--indigo) 0%,
+    var(--indigo) 25%,
+    rgba(99, 102, 241, 0.4) 50%,
+    var(--indigo) 75%,
+    var(--indigo) 100%
+  );
+  background-size: 200% 100%;
+  animation: progress-flow 1.4s ease-in-out infinite;
 }
-@keyframes progress-sweep {
-  from { transform: translateX(-100%); }
-  to   { transform: translateX(400%); }
+@keyframes progress-flow {
+  0%, 100% { background-position: 0% 0; }
+  50%      { background-position: 100% 0; }
 }
 
 .label-fast {

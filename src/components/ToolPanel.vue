@@ -171,13 +171,13 @@ function handlePurchaseTool(toolId: string): void {
 }
 
 .tool-purchased {
-  border-color: var(--color-success, #22c55e);
-  background: var(--bg-success-light, #f0fdf4);
-  opacity: 0.85;
+  border-color: var(--emerald);
+  background: var(--emerald-bg);
+  opacity: 1;
 }
 
 .tool-disabled {
-  opacity: 0.6;
+  border-color: var(--border-50);
 }
 
 .tool-header {
@@ -200,11 +200,11 @@ function handlePurchaseTool(toolId: string): void {
 }
 
 .tool-tier-badge {
-  font-size: 11px;
-  padding: 1px 6px;
-  border-radius: 10px;
-  background: var(--bg-muted, #e5e7eb);
-  color: var(--text-secondary, #6b7280);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--indigo-bg);
+  color: var(--indigo);
   font-weight: 600;
 }
 
@@ -240,19 +240,19 @@ function handlePurchaseTool(toolId: string): void {
 }
 
 .effect-item {
-  font-size: 11px;
-  padding: 2px 7px;
-  border-radius: 10px;
-  background: var(--bg-muted, #e5e7eb);
-  color: var(--text-secondary, #6b7280);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--indigo-bg);
+  color: var(--indigo);
   display: flex;
   align-items: center;
   gap: 3px;
+  white-space: nowrap;
 }
 
 .effect-value {
-  color: var(--color-accent, #3b82f6);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .btn-purchase {
@@ -262,8 +262,8 @@ function handlePurchaseTool(toolId: string): void {
   border-radius: 4px;
   font-size: 12px;
   cursor: not-allowed;
-  background: var(--bg-muted, #e5e7eb);
-  color: var(--text-muted, #9ca3af);
+  background: var(--bg-card-50);
+  color: var(--text-dim);
   transition: background 0.15s;
 }
 

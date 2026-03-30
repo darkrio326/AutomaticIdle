@@ -670,6 +670,11 @@ export const useFlowStore = defineStore('flow', {
 
       this.errorMessage = `购买成功：${this.gameConfig.tools?.[toolId]?.name ?? toolId}`;
       this.persistState();
+
+      // 2.5 秒后自动清除消息
+      setTimeout(() => {
+        this.errorMessage = '';
+      }, 2500);
     },
 
     /**
