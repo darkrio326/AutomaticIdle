@@ -1,11 +1,41 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { RecipeConfig } from '@/core/types';
 import { useFlowStore } from '@/stores/flowStore';
 import { useRuntimeStore } from '@/stores/runtimeStore';
+import { useFlowTemplateStore } from '@/stores/flowTemplateStore';
 
 const flowStore = useFlowStore();
 const runtimeStore = useRuntimeStore();
+const templateStore = useFlowTemplateStore();
+
+// ── 流程模板 ──
+const showSaveInput = ref(false);
+const newTemplateName = ref('');
+const selectedTemplateId = ref('');
+
+function onSaveTemplate(): void {
+  if (!newTemplateName.value.trim()) return;
+  templateStore.saveTemplate(
+    newTemplateName.value,
+    flowStore.steps.map((s) => ({ recipeId: s.recipeId, repeat: s.repeat })),
+  );
+  newTemplateName.value = '';
+  showSaveInput.value = false;
+}
+
+function onLoadTemplate(): void {
+  if (!selectedTemplateId.value) return;
+  const tpl = templateStore.getTemplate(selectedTemplateId.value);
+  if (!tpl) return;
+  flowStore.replaceSteps(tpl.steps);
+  runtimeStore.notifyFlowChanged();
+}
+
+function onDeleteTemplate(id: string): void {
+  templateStore.deleteTemplate(id);
+  if (selectedTemplateId.value === id) selectedTemplateId.value = '';
+}
 
 const gatherRecipes = computed(() =>
   flowStore.recipeOptions.filter((recipe) => recipe.category === 'gather')
@@ -107,6 +137,54 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
     <!-- 离线消息 -->
     <div v-if="flowStore.offlineMessage" class="offline-msg">
       {{ flowStore.offlineMessage }}
+    </div>
+
+    <!-- ── 流程模板 ── -->
+    <div class="template-bar">
+      <div class="template-row">
+        <select
+          v-model="selectedTemplateId"
+          class="template-select"
+          :disabled="templateStore.templates.length === 0"
+        >
+          <option value="">{{ templateStore.templates.length === 0 ? '暂无模板' : '选择模板…' }}</option>
+          <option v-for="tpl in templateStore.templates" :key="tpl.id" :value="tpl.id">
+            {{ tpl.name }}
+          </option>
+        </select>
+        <button
+          class="btn-tpl btn-tpl-load"
+          :disabled="!selectedTemplateId"
+          @click="onLoadTemplate"
+          title="载入所选模板"
+        >载入</button>
+        <button
+          v-if="selectedTemplateId"
+          class="btn-tpl btn-tpl-del"
+          @click="onDeleteTemplate(selectedTemplateId)"
+          title="删除所选模板"
+        >✕</button>
+        <button
+          v-if="!showSaveInput"
+          class="btn-tpl btn-tpl-save"
+          :disabled="templateStore.isFull || flowStore.steps.length === 0"
+          :title="templateStore.isFull ? '已达上限 5 个' : '保存当前流程为模板'"
+          @click="showSaveInput = true"
+        >+ 保存 {{ templateStore.count }}/5</button>
+      </div>
+      <div v-if="showSaveInput" class="template-save-row">
+        <input
+          v-model="newTemplateName"
+          class="template-name-input"
+          placeholder="模板名称…"
+          maxlength="20"
+          @keydown.enter="onSaveTemplate"
+          @keydown.escape="showSaveInput = false"
+          autofocus
+        />
+        <button class="btn-tpl btn-tpl-confirm" @click="onSaveTemplate">确认</button>
+        <button class="btn-tpl btn-tpl-cancel" @click="showSaveInput = false">取消</button>
+      </div>
     </div>
 
     <!-- 步骤列表 -->
@@ -612,5 +690,118 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
   flex-shrink: 0;
   margin-left: auto;
   font-family: monospace;
+}
+
+/* ── 流程模板 ── */
+.template-bar {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.template-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.template-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  padding: 4px 6px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.template-save-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.template-name-input {
+  flex: 1;
+  font-size: 11px;
+  padding: 4px 8px;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.template-name-input:focus {
+  border-color: var(--indigo);
+}
+
+.btn-tpl {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-tpl-load {
+  background: var(--indigo-bg);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+}
+
+.btn-tpl-load:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.25);
+  color: white;
+}
+
+.btn-tpl-save {
+  background: var(--bg-card);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.btn-tpl-save:hover:not(:disabled) {
+  border-color: var(--indigo);
+  color: var(--text);
+}
+
+.btn-tpl-del {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+
+.btn-tpl-del:hover {
+  background: rgba(248, 113, 113, 0.2);
+}
+
+.btn-tpl-confirm {
+  background: var(--emerald-bg);
+  color: var(--emerald);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.btn-tpl-confirm:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.2);
+}
+
+.btn-tpl-cancel {
+  background: var(--bg-card);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
 }
 </style>

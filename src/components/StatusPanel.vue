@@ -489,8 +489,6 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
   color: var(--text-dim);
   text-align: right;
 }
-  margin-bottom: 6px;
-}
 
 .tool-info {
   margin-top: 6px;

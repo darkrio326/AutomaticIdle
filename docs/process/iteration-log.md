@@ -53,6 +53,27 @@
 - 结论：动态订单三槽系统完整接入，订单在 1s tick 内自动生成/过期/冷却，UI 实时显示剩余时间
 - 下一步建议：Phase 5 可选 ITER-029（资源扩展/煤炭链路）或 ITER-030（离线收益 v2）
 
+---
+
+### ITER-029 流程模板（v0.2 Phase 5）
+- 日期：2026-03-31
+- 所属版本：v0.2
+- 所属阶段：Phase 5
+- 类型：能力增强
+- 目标：支持最多 5 套命名流程模板，可保存当前流程、一键载入、删除，持久化到 localStorage
+- 改动范围：
+  - `src/stores/flowTemplateStore.ts`（新建）：Pinia Store，saveTemplate/deleteTemplate/getTemplate actions，isFull/count getters，localStorage 读写（key: flow_templates_v1）
+  - `src/stores/flowStore.ts`：新增 `replaceSteps(steps)` action，替换整个步骤数组并持久化
+  - `src/components/FlowEditor.vue`：脑部新增模板栏（下拉选择+载入+删除+保存行内输入），展示 x/5 容量，CSS 复用现有样式变量
+- 未改动范围：FlowEditor 其余逻辑不变
+- 完成内容：全量落地
+- 未完成内容：无
+- 测试情况：vue-tsc --noEmit 通过
+- 风险与注意事项：模板中包含已被建筑解锁的配方 ID，载入后若相关配方尚未解锁则步骤中显示配方名为 recipeId（预期行为）
+- 回滚方式：git revert；清空 localStorage flow_templates_v1
+- 结论：流程模板功能完整落地
+- 下一步建议：ITER-030 Runtime 调试面板（可选）或考虑封版 v0.2
+
 ## 与迭代工作流模板的边界
 
 - `迭代工作流`：执行前流程与门禁

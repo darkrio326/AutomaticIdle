@@ -463,6 +463,14 @@ export const useFlowStore = defineStore('flow', {
       this.steps = this.steps.filter((s) => s.uid !== uid);
       this.persistState();
     },
+    replaceSteps(steps: Array<{ recipeId: string; repeat: number }>): void {
+      this.steps = steps.map((s) => ({
+        uid: stepUidSeed++,
+        recipeId: s.recipeId,
+        repeat: Math.max(1, Math.floor(s.repeat)),
+      }));
+      this.persistState();
+    },
     updateStepRecipe(uid: number, recipeId: string): void {
       const step = this.steps.find((s) => s.uid === uid);
       if (!step) return;
