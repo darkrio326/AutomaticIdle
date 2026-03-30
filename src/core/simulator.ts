@@ -46,19 +46,8 @@ export function simulateFlow(
       }
     }
 
-    // 升级加速倍率：遍历所有 recipe_time 升级，找目标为本 recipe 的条目
-    let upgradeMultiplier = 1;
-    for (const upgradeConfig of Object.values(config.upgrades)) {
-      if (upgradeConfig.targetType === 'recipe_time' && upgradeConfig.targetId === recipe.id) {
-        const upgradeState = playerState.upgrades[upgradeConfig.id];
-        if (upgradeState != null && upgradeState.level > 0) {
-          upgradeMultiplier *= 1 - upgradeState.level * upgradeConfig.effectPerLevel;
-        }
-      }
-    }
-
-    // finalTime = max(0.1, baseTime × skillMultiplier × upgradeMultiplier)
-    const singleTime = Math.max(0.1, recipe.timeSeconds * skillMultiplier * upgradeMultiplier);
+    // finalTime = max(0.1, baseTime × skillMultiplier)
+    const singleTime = Math.max(0.1, recipe.timeSeconds * skillMultiplier);
     const stepTotalTime = singleTime * step.repeat;
 
     const stepResourceDelta: Record<string, number> = {};
