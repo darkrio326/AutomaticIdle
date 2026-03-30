@@ -10,6 +10,7 @@ import { simulateFlow } from '@/core/simulator';
 import { applyExpGains, calcRequiredExp } from '@/core/expSystem';
 import { loadSaveSnapshot, saveSnapshot } from '@/services/saveService';
 import { useBuildingStore } from './buildingStore';
+import { useToolStore } from './toolStore';
 import type {
   FlowDefinition,
   FlowStep,
@@ -86,6 +87,7 @@ function clonePlayerState(playerState: PlayerState): PlayerState {
     skills: Object.fromEntries(
       Object.entries(playerState.skills).map(([id, skill]) => [id, { ...skill }]),
     ),
+    purchasedTools: playerState.purchasedTools ? new Set(playerState.purchasedTools) : new Set(),
   };
 }
 
@@ -142,6 +144,9 @@ function calcDisplayRecipeTimeSeconds(
   playerState: PlayerState,
   gameConfig: GameConfig,
 ): number {
+  const toolStore = useToolStore();
+
+  // 计算技能加速
   let skillMultiplier = 1;
   if (recipe.requiredSkillId != null) {
     const skillConfig = gameConfig.skills[recipe.requiredSkillId];
@@ -152,7 +157,14 @@ function calcDisplayRecipeTimeSeconds(
     }
   }
 
-  return Math.max(0, recipe.timeSeconds * skillMultiplier);
+  // 计算工具加速（只取最高 tier 工具）
+  let toolMultiplier = 1;
+  const bestTool = toolStore.getHighestTierToolForRecipe(recipe.id, gameConfig);
+  if (bestTool) {
+    toolMultiplier = bestTool.timeMultiplier;
+  }
+
+  return Math.max(0, recipe.timeSeconds * skillMultiplier * toolMultiplier);
 }
 
 function buildGameConfig(): GameConfig {
@@ -185,6 +197,7 @@ function buildInitialPlayerState(): PlayerState {
       smelting: { skillId: 'smelting', level: 1, exp: 0 },
       smithing: { skillId: 'smithing', level: 1, exp: 0 },
     },
+    purchasedTools: new Set(),
   };
 }
 
@@ -267,6 +280,8 @@ function buildInitialState() {
     playerState: restoredPlayerState,
     completedOrderIds: Array.isArray(snapshot.completedOrderIds) ? snapshot.completedOrderIds : [],
     unlockedRecipeIds,
+    purchasedBuildingIds: snapshot.purchasedBuildingIds,
+    purchasedToolIds: snapshot.purchasedToolIds,
     lastSavedAt: now,
   });
 
@@ -346,8 +361,12 @@ export const useFlowStore = defineStore('flow', {
       exp: number;
       requiredExp: number;
       progressPercent: number;
-      timeBonusPercent: number;
+      skillBonusPercent: number;
+      applicableTools: Array<{ toolId: string; name: string; tier: number; timeMultiplier: number }>;
+      combinedBonusPercent: number;
     }> {
+      const toolStore = useToolStore();
+      
       return Object.values(state.gameConfig.skills).map((skillConfig) => {
         const skillState = state.playerState.skills[skillConfig.id] ?? {
           skillId: skillConfig.id,
@@ -362,10 +381,45 @@ export const useFlowStore = defineStore('flow', {
           : requiredExp > 0
             ? Math.min(100, (skillState.exp / requiredExp) * 100)
             : 0;
-        const timeBonusPercent = Math.max(
+        const skillBonusPercent = Math.max(
           0,
           (skillState.level - 1) * skillConfig.timeReductionPerLevel * 100,
         );
+
+        // 获取该技能对应的配方，并收集所有适用的工具
+        const recipesForSkill = Object.values(state.gameConfig.recipes)
+          .filter((r) => r.requiredSkillId === skillConfig.id);
+        
+        // 收集所有应用到这些配方的工具
+        const applicableToolsSet = new Map<string, { toolId: string; name: string; tier: number; timeMultiplier: number }>();
+        for (const recipe of recipesForSkill) {
+          const bestTool = toolStore.getHighestTierToolForRecipe(recipe.id, state.gameConfig);
+          if (bestTool) {
+            // 使用 tier 作为 key 来避免重复，取最高 tier 的工具
+            const existing = applicableToolsSet.get(String(bestTool.tier));
+            if (!existing || bestTool.tier >= (existing.tier ?? 0)) {
+              applicableToolsSet.set(String(bestTool.tier), {
+                toolId: bestTool.toolId,
+                name: state.gameConfig.tools?.[bestTool.toolId]?.name ?? bestTool.toolId,
+                tier: bestTool.tier,
+                timeMultiplier: bestTool.timeMultiplier,
+              });
+            }
+          }
+        }
+
+        const applicableTools = Array.from(applicableToolsSet.values())
+          .sort((a, b) => b.tier - a.tier);
+
+        // 计算技能和工具叠加后的总加速（1 - skillMultiplier * toolMultiplier 相对于基础时间的减速）
+        let skillMultiplier = 1 - skillBonusPercent / 100;
+        let toolMultiplier = 1;
+        if (applicableTools.length > 0) {
+          // 使用最高 tier 工具的效果
+          toolMultiplier = applicableTools[0].timeMultiplier;
+        }
+        const combinedMultiplier = skillMultiplier * toolMultiplier;
+        const combinedBonusPercent = Math.max(0, (1 - combinedMultiplier) * 100);
 
         return {
           id: skillConfig.id,
@@ -374,7 +428,9 @@ export const useFlowStore = defineStore('flow', {
           exp: skillState.exp,
           requiredExp,
           progressPercent,
-          timeBonusPercent,
+          skillBonusPercent,
+          applicableTools,
+          combinedBonusPercent,
         };
       });
     },
@@ -422,6 +478,7 @@ export const useFlowStore = defineStore('flow', {
   actions: {
     persistState(): void {
       const buildingStore = useBuildingStore();
+      const toolStore = useToolStore();
       const unlockedRecipeIds = Object.values(this.gameConfig.recipes)
         .filter((r) => r.enabled !== false)
         .map((r) => r.id);
@@ -434,6 +491,7 @@ export const useFlowStore = defineStore('flow', {
         completedOrderIds: [...this.completedOrderIds],
         unlockedRecipeIds,
         purchasedBuildingIds: buildingStore.getPurchasedBuildingIds(),
+        purchasedToolIds: toolStore.getPurchasedToolIds(),
         lastSavedAt: Date.now(),
       });
     },
@@ -597,6 +655,49 @@ export const useFlowStore = defineStore('flow', {
     clearPurchasedBuildings(): void {
       const buildingStore = useBuildingStore();
       buildingStore.clearPurchasedBuildings();
+      this.persistState();
+    },
+
+    /**
+     * 从保存快照中恢复已购工具
+     */
+    initToolsFromSnapshot(): void {
+      const snapshot = loadSaveSnapshot();
+      const toolStore = useToolStore();
+      if (snapshot?.purchasedToolIds) {
+        toolStore.restorePurchasedTools(snapshot.purchasedToolIds);
+      }
+    },
+
+    /**
+     * 购买工具
+     */
+    purchaseTool(toolId: string): void {
+      this.errorMessage = '';
+      const toolStore = useToolStore();
+
+      const check = toolStore.canPurchaseTool(toolId, this.playerState, this.gameConfig);
+      if (!check.canBuy) {
+        this.errorMessage = check.reason ?? '无法购买此工具';
+        return;
+      }
+
+      const result = toolStore.purchaseTool(toolId, this.playerState, this.gameConfig);
+      if (!result.success) {
+        this.errorMessage = result.reason ?? '购买失败';
+        return;
+      }
+
+      this.errorMessage = `购买成功：${this.gameConfig.tools?.[toolId]?.name ?? toolId}`;
+      this.persistState();
+    },
+
+    /**
+     * 清空已购工具状态
+     */
+    clearPurchasedTools(): void {
+      const toolStore = useToolStore();
+      toolStore.clearPurchasedTools();
       this.persistState();
     },
   },

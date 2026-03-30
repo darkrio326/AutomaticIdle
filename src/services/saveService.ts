@@ -8,6 +8,7 @@ export interface SaveSnapshot {
   completedOrderIds: string[];
   unlockedRecipeIds: string[];
   purchasedBuildingIds?: string[];
+  purchasedToolIds?: string[];
   lastSavedAt: number;
 }
 

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "order_iron_ingot",
+    "rarity": "common",
+    "weight": 50,
+    "requirementPool": [{ "resourceId": "iron_ingot", "min": 10, "max": 20 }],
+    "rewardPool": [{ "resourceId": "gold", "min": 150, "max": 250 }],
+    "durationSeconds": { "min": 600, "max": 900 }
+  },
+  {
+    "id": "order_copper_ingot",
+    "rarity": "uncommon",
+    "weight": 30,
+    "requirementPool": [{ "resourceId": "copper_ingot", "min": 8, "max": 15 }],
+    "rewardPool": [{ "resourceId": "gold", "min": 250, "max": 400 }],
+    "durationSeconds": { "min": 900, "max": 1500 }
+  },
+  {
+    "id": "order_steel_ingot",
+    "rarity": "rare",
+    "weight": 10,
+    "requirementPool": [{ "resourceId": "steel_ingot", "min": 3, "max": 6 }],
+    "rewardPool": [{ "resourceId": "gold", "min": 800, "max": 1200 }],
+    "durationSeconds": { "min": 1800, "max": 3600 }
+  }
+]

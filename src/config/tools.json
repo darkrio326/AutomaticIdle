@@ -1,5 +1,13 @@
 {
+  "iron_pickaxe": {
+    "tier": 1,
+    "name": "铁镐",
+    "effects": {
+      "mine_iron": { "timeMultiplier": 0.9 }
+    }
+  },
   "copper_pickaxe": {
+    "tier": 2,
     "name": "铜镐",
     "cost": { "copper_ingot": 10 },
     "effects": {
@@ -8,6 +16,7 @@
     }
   },
   "copper_furnace": {
+    "tier": 2,
     "name": "铜制熔炉",
     "cost": { "copper_ingot": 15 },
     "effects": {
@@ -16,6 +25,7 @@
     }
   },
   "steel_pickaxe": {
+    "tier": 3,
     "name": "钢镐",
     "cost": {
       "steel_ingot": 10
@@ -28,6 +38,7 @@
   },
 
   "steel_furnace_upgrade": {
+    "tier": 3,
     "name": "高效高温炉",
     "cost": {
       "steel_ingot": 15

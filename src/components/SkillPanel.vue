@@ -17,7 +17,20 @@ const skillItems = computed(() => flowStore.skillItems);
         <p v-if="skill.requiredExp > 0">经验：{{ skill.exp }} / {{ skill.requiredExp }}</p>
         <p v-else>经验：已满级</p>
         <p>升级进度：{{ skill.progressPercent.toFixed(1) }}%</p>
-        <p>效率加成：{{ skill.timeBonusPercent.toFixed(1) }}%</p>
+        <p>技能加成：{{ skill.skillBonusPercent.toFixed(1) }}%</p>
+        
+        <!-- 工具加速信息 -->
+        <div v-if="skill.applicableTools.length > 0">
+          <p>适配工具：</p>
+          <ul>
+            <li v-for="tool in skill.applicableTools" :key="tool.toolId">
+              {{ tool.name }} (Tier {{ tool.tier }}) - {{ (tool.timeMultiplier * 100).toFixed(0) }}%
+            </li>
+          </ul>
+        </div>
+        
+        <!-- 总体加速效果 -->
+        <p><strong>总效率加成：{{ skill.combinedBonusPercent.toFixed(1) }}%</strong></p>
       </li>
     </ul>
   </section>

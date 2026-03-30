@@ -77,6 +77,7 @@ export interface ToolConfig {
   name: string;
   cost: Record<string, number>;
   effects: Record<string, ToolEffect>;
+  tier?: number;
 }
 
 export interface FlowStep {
@@ -99,6 +100,7 @@ export interface SkillState {
 export interface PlayerState {
   inventory: Record<string, number>;
   skills: Record<string, SkillState>;
+  purchasedTools?: Set<string>;
 }
 
 export interface SimulationStepResult {
