@@ -103,7 +103,7 @@ export const useBuildingStore = defineStore('building', {
         if (current < amount) {
           return {
             canBuy: false,
-            reason: `${resourceId} 不足（需 ${amount}，有 ${current}）`,
+            reason: `${gameConfig.resources?.[resourceId]?.name ?? resourceId} 不足（需 ${amount}，有 ${current}）`,
           };
         }
       }

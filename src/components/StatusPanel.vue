@@ -11,7 +11,7 @@ const flowStore = useFlowStore();
 const runtimeStore = useRuntimeStore();
 const orderStore = useOrderStore();
 
-const ordersExpanded = ref(false);
+const ordersExpanded = ref(true);
 
 /** 订单时钟刷新 */
 const now = ref(Date.now());
@@ -245,12 +245,12 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
 
     <!-- ── 订单任务 ── -->
     <section class="panel-section">
-      <button class="orders-toggle" @click="ordersExpanded = !ordersExpanded">
+      <div class="section-header orders-toggle" @click="ordersExpanded = !ordersExpanded">
         <span class="section-icon">📋</span>
-        <span class="section-title">订单任务</span>
+        <h3 class="section-title">订单任务</h3>
         <span class="orders-count">{{ activeOrderCount }} 进行中</span>
         <span class="toggle-arrow" :class="{ expanded: ordersExpanded }">›</span>
-      </button>
+      </div>
       <div v-if="ordersExpanded" class="orders-list">
         <p v-if="flowStore.errorMessage" class="msg-tip">{{ flowStore.errorMessage }}</p>
         <div v-for="slot in slotInfos" :key="slot.slotIndex" class="order-slot">
@@ -530,15 +530,9 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
 /* ── 升级 ── */
 /* ── 订单 ── */
 .orders-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  background: none;
-  border: none;
-  padding: 0;
-  margin-bottom: 8px;
   cursor: pointer;
+  margin-bottom: 8px;
+  user-select: none;
 }
 
 .orders-toggle:hover .section-title {

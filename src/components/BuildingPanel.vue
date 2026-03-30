@@ -178,7 +178,7 @@ function handlePurchaseBuilding(buildingId: string): void {
 }
 
 .building-card.building-disabled {
-  opacity: 0.5;
+  opacity: 0.65;
   background: var(--bg-disabled, #f5f5f5);
 }
 
@@ -251,7 +251,7 @@ function handlePurchaseBuilding(buildingId: string): void {
 }
 
 .btn-purchase:disabled {
-  opacity: 0.5;
+  opacity: 1;
 }
 
 .btn-purchase.btn-purchase-ready {
