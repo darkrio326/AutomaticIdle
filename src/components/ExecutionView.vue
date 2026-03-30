@@ -23,6 +23,7 @@ interface ExecViewSnapshot {
   outputs: Array<{ resourceId: string; amount: number }>;
   stepProgress: number;
   loopCount: number;
+  isFast: boolean;
 }
 
 function buildLiveSnapshot(): ExecViewSnapshot {
@@ -59,6 +60,7 @@ function buildLiveSnapshot(): ExecViewSnapshot {
     outputs: recipe?.outputs?.map((x) => ({ ...x })) ?? [],
     stepProgress: Math.round(runtimeStore.stepProgressRatio * 100),
     loopCount: runtimeStore.loopCount,
+    isFast: (recipe?.timeSeconds ?? 1) < 1,
   };
 }
 
@@ -152,18 +154,23 @@ function formatResourceAmount(resourceId: string, amount: number): string {
 
             <!-- 进度条 -->
             <div class="progress-track">
+              <!-- 快速配方（< 1s）：持续前行扫描条，不归零 -->
+              <div v-if="viewState.isFast" class="progress-fill progress-fill--sweep"></div>
+              <!-- 普通配方：按进度填充 -->
               <div
+                v-else
                 class="progress-fill"
                 :style="{ width: viewState.stepProgress + '%' }"
               ></div>
-              <!-- 刻度线 -->
-              <div class="progress-ticks" aria-hidden="true">
+              <!-- 刻度线（普通配方才显示） -->
+              <div v-if="!viewState.isFast" class="progress-ticks" aria-hidden="true">
                 <div class="tick" v-for="i in 4" :key="i"></div>
               </div>
             </div>
             <div class="progress-labels">
               <span>0%</span>
-              <span>{{ viewState.stepProgress }}%</span>
+              <span v-if="viewState.isFast" class="label-fast">快速循环</span>
+              <span v-else>{{ viewState.stepProgress }}%</span>
             </div>
           </div>
         </template>
@@ -465,6 +472,26 @@ function formatResourceAmount(resourceId: string, amount: number): string {
   border-radius: var(--r-full);
   transition: width 0.08s linear;
   box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
+}
+
+/* 快速配方扫描条（< 1s）*/
+.progress-fill--sweep {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28%;
+  height: 100%;
+  transition: none;
+  animation: progress-sweep 0.7s linear infinite;
+}
+@keyframes progress-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(400%); }
+}
+
+.label-fast {
+  color: var(--cyan);
+  font-style: italic;
 }
 
 .progress-ticks {
