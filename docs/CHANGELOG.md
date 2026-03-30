@@ -10,6 +10,7 @@
 ## [Unreleased]
 
 ### 变更
+- [2026-03-30 +0800] 文档同步：`docs/versions/v0.2-plan.md` 回填 v0.2 实际执行结果（ITER-022 ~ ITER-029 标记 DONE，ITER-030 标记 DEFERRED），新增 `docs/versions/v0.2-RELEASE.md` 发布说明与门禁结论。
 - [2026-03-30 +0800] 小修改（UI）：① `BuildingPanel.vue` / `ToolPanel.vue` 清理亮色降级变量，统一改用暗色主题已有变量（按钮、标签、已购态卡片），修复未购/已购卡片与按钮在暗色主题下发白、发灰、文字难以辨认的问题；② `ExecutionView.vue` / `FlowEditor.vue` 统一进度条主色为 `indigo`，并将 `< 1s` 快速配方进度条改为“整条填满 + 流动高光”样式；③ `PlayPage.vue` 新增居中的全局浮层消息，`flowStore.ts` 购买工具成功提示 2.5s 后自动消失；④ 同步刷新 `dist/` 构建产物。
 - [2026-03-30 +0800] 小修改（bugfix + UI）：① `buildingStore.ts` / `toolStore.ts` 修复 reason 文本中资源 ID 未本地化问题（如 `iron_ingot 不足` → `铁锭 不足`），改为使用 `gameConfig.resources?.[id]?.name`；② `BuildingPanel.vue` 修复未购建筑卡片 `building-disabled(0.5)` 与按钮 `:disabled(0.5)` 叠加导致按钮近乎不可见（合成约 0.25 透明度）的问题，改为卡片 opacity 0.65，移除按钮额外 opacity；③ `StatusPanel.vue` 订单模块默认改为展开（`ref(false)` → `ref(true)`）并统一标题为 `div.section-header`，移除残留 `button` 包裹。— commit c87bf29
 - [2026-03-31 +0800] 修复（clonePlayerState 崩溃 + 工具效果不生效）：`clonePlayerState` 对 JSON 反序列化的 `purchasedTools: {}` 调用 `new Set({})` 抛出 `TypeError: object is not iterable`；同时 `initToolsFromSnapshot` 只写 `toolStore` 未回写 `playerState.purchasedTools`，导致 runtimeEngine 运行时读不到工具，工具加速不生效。修复：① `clonePlayerState` 加 `instanceof Set / Array.isArray` 三路判断，降级为空 Set 而非崩溃；② `initToolsFromSnapshot` 在写 `toolStore` 后同步赋值 `playerState.purchasedTools`；③ `purchaseTool` 成功后同步 `playerState.purchasedTools.add(toolId)`。
