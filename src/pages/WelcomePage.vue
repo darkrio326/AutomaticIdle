@@ -6,46 +6,76 @@ const router = useRouter();
 function startGame(): void {
   router.push('/play');
 }
+
+const PARTICLES = [
+  { icon: '⛏️', left: 7,  delay: 0,   dur: 9  },
+  { icon: '🪨',  left: 17, delay: 2,   dur: 11 },
+  { icon: '⚙️',  left: 29, delay: 4.5, dur: 8  },
+  { icon: '🔩',  left: 42, delay: 1,   dur: 13 },
+  { icon: '💰',  left: 54, delay: 3,   dur: 10 },
+  { icon: '🏭',  left: 66, delay: 0.5, dur: 12 },
+  { icon: '⛏️',  left: 78, delay: 5,   dur: 9  },
+  { icon: '🔧',  left: 89, delay: 2.5, dur: 11 },
+  { icon: '💰',  left: 22, delay: 7,   dur: 10 },
+  { icon: '⚙️',  left: 59, delay: 6,   dur: 8  },
+  { icon: '📦',  left: 73, delay: 1.5, dur: 14 },
+  { icon: '🪨',  left: 11, delay: 8,   dur: 9  },
+] as const;
 </script>
 
 <template>
   <div class="welcome">
-    <!-- 背景装饰圆 -->
-    <div class="bg-circles" aria-hidden="true">
+    <!-- 背景层：装饰圆 + 浮动粒子 -->
+    <div class="bg-layer" aria-hidden="true">
       <div class="circle circle-1"></div>
       <div class="circle circle-2"></div>
       <div class="circle circle-3"></div>
+      <div
+        v-for="(p, i) in PARTICLES"
+        :key="i"
+        class="particle"
+        :style="`left:${p.left}%;animation-delay:${p.delay}s;animation-duration:${p.dur}s`"
+      >{{ p.icon }}</div>
     </div>
 
     <div class="welcome-body">
       <!-- Logo / 标题区 -->
       <div class="logo-area">
-        <div class="logo-icon">⚙</div>
+        <div class="logo-ring"></div>
+        <div class="logo-icon">⚙️</div>
         <h1 class="game-title">AutomaticIdle</h1>
-        <p class="game-subtitle">自动化流程 · 积累资源 · 解锁产业链</p>
+        <p class="game-subtitle">设计 · 自动化 · 暴力刷资源</p>
+      </div>
+
+      <!-- 传送带跑马灯 -->
+      <div class="ticker-wrap" aria-hidden="true">
+        <div class="ticker-track">
+          <span class="ticker-text">⛏️ 采矿 → 🪨 铁矿石 +2 → 🏭 冶炼 → 🔩 铁锭 +1 → 💰 出售 → 金币 +8 &nbsp;·&nbsp; ⚙️ 流程自动执行 → 📦 订单完成 → 奖励入账 &nbsp;·&nbsp; 🔧 工具加速 −30% → ⚡ 效率提升 → 💰 收益翻倍 &nbsp;·&nbsp; </span>
+          <span class="ticker-text" aria-hidden="true">⛏️ 采矿 → 🪨 铁矿石 +2 → 🏭 冶炼 → 🔩 铁锭 +1 → 💰 出售 → 金币 +8 &nbsp;·&nbsp; ⚙️ 流程自动执行 → 📦 订单完成 → 奖励入账 &nbsp;·&nbsp; 🔧 工具加速 −30% → ⚡ 效率提升 → 💰 收益翻倍 &nbsp;·&nbsp; </span>
+        </div>
       </div>
 
       <!-- 特性卡片 -->
       <div class="feature-grid">
         <div class="feature-card">
-          <span class="feature-icon">🔄</span>
-          <span class="feature-label">流程自动化</span>
-          <span class="feature-desc">编排采集、加工、出售步骤，离线也能持续运转</span>
+          <span class="feature-icon">⚙️</span>
+          <span class="feature-label">自己设计生产流程</span>
+          <span class="feature-desc">自由规划每一步工序，让产线按你的意志全自动运转</span>
         </div>
         <div class="feature-card">
           <span class="feature-icon">🏭</span>
-          <span class="feature-label">建筑解锁</span>
-          <span class="feature-desc">购买建筑开启新的生产配方与资源种类</span>
+          <span class="feature-label">解锁新的产业链</span>
+          <span class="feature-desc">购建建筑，开启铸造、深加工等全新工序与资源</span>
         </div>
         <div class="feature-card">
-          <span class="feature-icon">🔨</span>
-          <span class="feature-label">工具加速</span>
-          <span class="feature-desc">购置工具降低配方耗时，大幅提升产出效率</span>
+          <span class="feature-icon">⛏️</span>
+          <span class="feature-label">提升效率极限</span>
+          <span class="feature-desc">装备趁手的工具，把每道工序的耗时压到极限</span>
         </div>
         <div class="feature-card">
-          <span class="feature-icon">📋</span>
-          <span class="feature-label">动态订单</span>
-          <span class="feature-desc">完成限时订单获取奖励，保持节奏持续输出</span>
+          <span class="feature-icon">📦</span>
+          <span class="feature-label">抢时间订单赚奖励</span>
+          <span class="feature-desc">限时单子随时刷新，抢节奏完成，奖励直接入账</span>
         </div>
       </div>
 
@@ -72,11 +102,12 @@ function startGame(): void {
   background: var(--bg-root);
 }
 
-/* ── 背景装饰 ── */
-.bg-circles {
+/* ── 背景层 ── */
+.bg-layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  overflow: hidden;
 }
 .circle {
   position: absolute;
@@ -84,32 +115,42 @@ function startGame(): void {
   opacity: 0.06;
 }
 .circle-1 {
-  width: 600px;
-  height: 600px;
+  width: 600px; height: 600px;
   background: var(--indigo);
-  top: -160px;
-  right: -120px;
+  top: -160px; right: -120px;
   animation: float 12s ease-in-out infinite;
 }
 .circle-2 {
-  width: 400px;
-  height: 400px;
+  width: 400px; height: 400px;
   background: var(--cyan);
-  bottom: -100px;
-  left: -80px;
+  bottom: -100px; left: -80px;
   animation: float 16s ease-in-out infinite reverse;
 }
 .circle-3 {
-  width: 260px;
-  height: 260px;
+  width: 260px; height: 260px;
   background: var(--amber);
-  bottom: 120px;
-  right: 180px;
+  bottom: 120px; right: 180px;
   animation: float 10s ease-in-out infinite 2s;
 }
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50%       { transform: translateY(-24px); }
+}
+
+/* 浮动粒子图标 */
+.particle {
+  position: absolute;
+  bottom: -40px;
+  font-size: 18px;
+  opacity: 0;
+  animation: rise linear infinite;
+  user-select: none;
+}
+@keyframes rise {
+  0%   { transform: translateY(0)     rotate(0deg);   opacity: 0;    }
+  10%  {                                               opacity: 0.35; }
+  80%  {                                               opacity: 0.18; }
+  100% { transform: translateY(-110vh) rotate(25deg); opacity: 0;    }
 }
 
 /* ── 主体 ── */
@@ -119,7 +160,7 @@ function startGame(): void {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 36px;
+  gap: 32px;
   max-width: 680px;
   width: 100%;
   padding: 0 24px;
@@ -128,6 +169,22 @@ function startGame(): void {
 /* ── Logo 区 ── */
 .logo-area {
   text-align: center;
+  position: relative;
+}
+.logo-ring {
+  position: absolute;
+  width: 88px; height: 88px;
+  border-radius: 50%;
+  border: 2px solid var(--indigo);
+  top: 0; left: 50%;
+  transform: translateX(-50%) scale(0.85);
+  opacity: 0;
+  animation: pulse-ring 2.8s ease-out infinite;
+}
+@keyframes pulse-ring {
+  0%   { transform: translateX(-50%) scale(0.85); opacity: 0.4; }
+  70%  { transform: translateX(-50%) scale(1.7);  opacity: 0;   }
+  100% { transform: translateX(-50%) scale(0.85); opacity: 0;   }
 }
 .logo-icon {
   font-size: 56px;
@@ -156,6 +213,33 @@ function startGame(): void {
   letter-spacing: 0.5px;
 }
 
+/* ── 传送带跑马灯 ── */
+.ticker-wrap {
+  width: 100%;
+  overflow: hidden;
+  border-top: 1px solid var(--border-50);
+  border-bottom: 1px solid var(--border-50);
+  padding: 7px 0;
+  mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+}
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker 24s linear infinite;
+}
+.ticker-text {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  padding-right: 0;
+  letter-spacing: 0.3px;
+}
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
 /* ── 特性卡片 ── */
 .feature-grid {
   display: grid;
@@ -171,6 +255,11 @@ function startGame(): void {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.feature-card:hover {
+  border-color: var(--indigo);
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.12);
 }
 .feature-icon {
   font-size: 22px;
