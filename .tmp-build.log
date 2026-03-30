@@ -1,0 +1,13 @@
+
+> automatic-idle@0.1.0 build
+> vue-tsc && vite build
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+vite v5.4.21 building for production...
+transforming...
+✓ 45 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.39 kB │ gzip:  0.28 kB
+dist/assets/index-CK0Aip_l.js  87.01 kB │ gzip: 33.22 kB
+✓ built in 348ms

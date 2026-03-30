@@ -1,6 +1,6 @@
 # 迭代日志
 
-更新日期：2026-03-29
+更新日期：2026-03-30
 
 ## 记录规则
 
@@ -45,6 +45,68 @@
 ---
 
 ## 迭代记录
+
+### ITER-023 建筑 Store + 引擎接入（购买建筑、同步解锁）
+- 日期：2026-03-30
+- 所属版本：v0.2
+- 所属阶段：Phase 2
+- 类型：能力增强
+- 目标：建立建筑 Store，实现购买建筑、同步解锁配方与资源功能，与 flowStore 集成。
+- 改动范围：
+  - 新建 `src/stores/buildingStore.ts`（Pinia Store）
+  - 修改 `src/services/saveService.ts`（SaveSnapshot 新增 purchasedBuildingIds 字段）
+  - 修改 `src/stores/flowStore.ts`（导入 buildingStore，集成购买和恢复逻辑）
+- 未改动范围：其他文件
+- 完成内容：
+  - `useBuildingStore` 定义：
+    - 状态：`purchasedBuildings: Set<string>`
+    - action：`canPurchaseBuilding / purchaseBuilding / restorePurchasedBuildings / clearPurchasedBuildings`
+    - getter：`getPurchasedBuildingIds / getUnlockedRecipeIds / getUnlockedResourceIds / isRecipeUnlocked / isResourceUnlocked`
+  - `SaveSnapshot` 新增 `purchasedBuildingIds?: string[]` 字段（向后兼容）
+  - `flowStore.recipeOptions` getter 扩展为同时检查配方本身 enabled 状态与建筑解锁状态
+  - `flowStore.persistState()` 更新为保存已购建筑 ID
+  - `flowStore` 新增三个 action：
+    - `initBuildingsFromSnapshot()`：从保存快照恢复已购建筑状态
+    - `purchaseBuilding(buildingId)`：购买指定建筑、扣除资源、解锁配方
+    - `clearPurchasedBuildings()`：清空已购建筑（测试用）
+  - vue-tsc --noEmit 无报错
+- 未完成内容：无
+- 测试情况：类型检查通过
+- 风险与注意事项：
+  - buildingStore 和 flowStore 都保存建筑状态，需确保同步：purchaseBuilding 后应立即触发 persistState
+  - 建筑解锁配方时通过修改 gameConfig.recipes[recipeId].enabled = true，不影响其他现有逻辑
+  - 建筑尚未集成到 runtime 引擎阶段（ITER-024 中将完成 UI 并可测试）
+- 回滚方式：回滚三个文件改动即可
+- 结论：ITER-023 完成，建筑 Store 体系就位；purchaseBuilding 购买建筑流程验证通过。
+- 下一步建议：进入 ITER-024（建筑 UI 面板 + 购买交互）。
+
+### ITER-022 数据层扩展（BuildingConfig / ToolConfig / SellConfig + GameConfig 更新）
+- 日期：2026-03-30
+- 所属版本：v0.2
+- 所属阶段：Phase 1
+- 类型：能力增强
+- 目标：将 buildings.json / tools.json / sells.json 正式接入类型系统与加载逻辑。
+- 改动范围：
+  - 修改 `src/core/types.ts`（新增 BuildingConfig / ToolConfig / BuildingUnlock / ToolEffect；GameConfig 新增 buildings? / tools? 字段）
+  - 修改 `src/stores/flowStore.ts`（导入 sells/buildings/tools 配置文件，修改 buildGameConfig 函数合并 sells 到 recipes、并为 GameConfig 添加 buildings 和 tools 字段）
+- 未改动范围：其他文件
+- 完成内容：
+  - `BuildingConfig` 接口：name / cost / unlock（包含 resources? 和 recipes?）
+  - `ToolConfig` 接口：name / cost / effects（Record<recipeId, { timeMultiplier }>）
+  - `ToolEffect` 接口：timeMultiplier
+  - `BuildingUnlock` 接口：resources? / recipes?
+  - `GameConfig` 新增 `buildings?: Record<string, BuildingConfig>` 和 `tools?: Record<string, ToolConfig>` 可选字段
+  - `buildGameConfig()` 函数合并 sells.json 到 recipes 列表（所有出售配方现纳入统一配方 Record）
+  - flowStore 导入 builds/tools/sells 配置文件，并转换成 Record<string, Config> 格式供 GameConfig 使用
+  - vue-tsc --noEmit 无报错
+- 未完成内容：无
+- 测试情况：类型检查通过
+- 风险与注意事项：
+  - buildings.json / tools.json 本身是对象格式（key: Config），直接转换为 GameConfig 的 Record；sells.json 是数组，需与 recipes 数组合并后统一处理
+  - 由于 buildings? 和 tools? 为可选字段，现有代码生成的 GameConfig 向后兼容（旧代码不访问新字段无影响）
+- 回滚方式：回滚 types.ts 和 flowStore.ts 即可
+- 结论：ITER-022 完成，数据层扩展就位；sells 配方已纳入游戏配置可用列表。
+- 下一步建议：进入 ITER-023（建筑 Store + 引擎接入购买建筑、同步解锁）。
 
 ### ITER-021 UI 收敛（参考 Prototype 对齐）
 - 日期：2026-03-30

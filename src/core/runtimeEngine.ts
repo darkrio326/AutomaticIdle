@@ -16,8 +16,7 @@ import type { GameConfig, RecipeConfig } from "./types";
 import type { RuntimeState } from "./runtimeTypes";
 import { applyExpGains } from "./expSystem";
 
-// ─── GPS 滑动窗口（5 秒）─────────────────────────────────────────────────────
-const GPS_WINDOW_MS = 5_000;
+// ─── GPS 静态计算 ───────────────────────────────────────────────────────────────
 
 // ─── 工具 ─────────────────────────────────────────────────────────────────────
 
@@ -84,7 +83,11 @@ function executeOneRepeat(
 
   // 消耗输入资源
   for (const input of recipe.inputs) {
-    addDelta(state.playerState.inventory, input.resourceId, -input.amount);
+    const current = state.playerState.inventory[input.resourceId] ?? 0;
+    state.playerState.inventory[input.resourceId] = Math.max(
+      0,
+      current - input.amount
+    );
   }
   // 产出输出资源
   for (const output of recipe.outputs) {
@@ -112,6 +115,48 @@ function executeOneRepeat(
   );
 
   return goldGained;
+}
+
+/** 判断当前步骤的一次 repeat 是否具备足够输入资源。 */
+function canExecuteCurrentRepeat(
+  state: RuntimeState,
+  config: GameConfig
+): boolean {
+  if (state.activeFlow == null) return false;
+  const step = state.activeFlow.steps[state.stepIndex];
+  if (step == null) return false;
+  const recipe = config.recipes[step.recipeId];
+  if (recipe == null) return false;
+
+  for (const input of recipe.inputs) {
+    const current = state.playerState.inventory[input.resourceId] ?? 0;
+    if (current < input.amount) return false;
+  }
+  return true;
+}
+
+/**
+ * 计算当前流程的静态 GPS（gold per second）。
+ * 公式：流程一次完整循环的总金币产出 / 总耗时（秒）。
+ * 基于当前 playerState 的技能/升级效果实时计算。
+ */
+function calcStaticGps(state: RuntimeState, config: GameConfig): number {
+  if (state.activeFlow == null || state.activeFlow.steps.length === 0) return 0;
+  let totalGold = 0;
+  let totalTimeS = 0;
+  for (const step of state.activeFlow.steps) {
+    const recipe = config.recipes[step.recipeId];
+    if (recipe == null) continue;
+    const t = calcActualStepTime(recipe, state, config);
+    totalTimeS += t * step.repeat;
+    for (const output of recipe.outputs) {
+      const rc = config.resources[output.resourceId];
+      if (rc?.type === "currency") {
+        totalGold += output.amount * step.repeat;
+      }
+    }
+  }
+  return totalTimeS > 0 ? totalGold / totalTimeS : 0;
 }
 
 // ─── 步骤推进器（ITER-016）────────────────────────────────────────────────────
@@ -145,8 +190,19 @@ function advanceStep(
     const recipe = config.recipes[step.recipeId];
     if (recipe == null) break;
 
+    // 资源不足时立即停机（等待玩家补充资源或编辑流程）。
+    if (!canExecuteCurrentRepeat(state, config)) {
+      state.status = "idle";
+      state.lastTickAt = 0;
+      state.stepProgress = 0;
+      state.repeatProgress = 0;
+      break;
+    }
+
     // 当前这次 repeat 的实际耗时（ms）
     const repeatTimeMs = calcActualStepTime(recipe, state, config) * 1000;
+    // 写入 state，供进度条精确使用
+    state.currentRepeatTotalMs = repeatTimeMs;
     const needed = repeatTimeMs - state.stepProgress;
 
     if (remaining < needed) {
@@ -158,10 +214,7 @@ function advanceStep(
       remaining -= needed;
       state.stepProgress = 0;
 
-      const gold = executeOneRepeat(state, config);
-
-      // GPS 滑动窗口累积
-      state.goldInWindow += gold;
+      executeOneRepeat(state, config);
 
       // 推进 repeatProgress
       state.repeatProgress += 1;
@@ -170,15 +223,27 @@ function advanceStep(
         // 该步骤全部 repeat 完成，切换到下一步骤
         state.repeatProgress = 0;
 
-        // 检查是否有待生效流程（流程切换在步骤边界生效）
+        // 检查是否有待生效流程（步骤边界切换，保持步骤进度连续）
+        const nextIndex = state.stepIndex + 1;
+        const didCompleteOldFlow =
+          state.activeFlow != null && nextIndex >= state.activeFlow.steps.length;
         if (state.pendingFlow != null) {
-          state.activeFlow = state.pendingFlow;
+          const newFlow = state.pendingFlow;
+          state.activeFlow = newFlow;
           state.pendingFlow = null;
-          state.stepIndex = 0;
           state.stepProgress = 0;
           state.repeatProgress = 0;
+          // 不重置到 step 0，而是继续到下一步（与非 pending 分支一致）
+          if (nextIndex >= newFlow.steps.length) {
+            state.stepIndex = 0;
+          } else {
+            state.stepIndex = nextIndex;
+          }
+          // 只在旧流程完整跑完一轮时计数 +1。
+          if (didCompleteOldFlow) {
+            state.loopCount += 1;
+          }
         } else {
-          const nextIndex = state.stepIndex + 1;
           if (nextIndex >= state.activeFlow.steps.length) {
             // 流程结束，回到首步骤，循环计数+1
             state.stepIndex = 0;
@@ -290,15 +355,8 @@ export class RuntimeEngine {
     if (deltaMs > 0) {
       advanceStep(this._state, deltaMs, this._config);
 
-      // GPS 滑动窗口时间推进
-      this._state.gpsWindowMs += deltaMs;
-      if (this._state.gpsWindowMs >= GPS_WINDOW_MS) {
-        this._state.gps =
-          (this._state.goldInWindow / this._state.gpsWindowMs) * 1000;
-        // 滑动窗口重置（不清零，保留超出部分防止跳变）
-        this._state.goldInWindow = 0;
-        this._state.gpsWindowMs = 0;
-      }
+      // GPS 静态公式（总流程金币 / 总流程耗时）
+      this._state.gps = calcStaticGps(this._state, this._config);
     }
 
     // 通知外部同步

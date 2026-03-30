@@ -1,0 +1,22 @@
+[
+  {
+    "id": "sell_iron_ingot",
+    "name": "出售铁锭",
+    "category": "sell",
+    "timeSeconds": 0,
+    "inputs": [{ "resourceId": "iron_ingot", "amount": 1 }],
+    "outputs": [{ "resourceId": "gold", "amount": 8 }],
+    "expGains": [],
+    "enabled": true
+  },
+  {
+    "id": "sell_iron_sword",
+    "name": "出售铁剑",
+    "category": "sell",
+    "timeSeconds": 0,
+    "inputs": [{ "resourceId": "iron_sword", "amount": 1 }],
+    "outputs": [{ "resourceId": "gold", "amount": 100 }],
+    "expGains": [],
+    "enabled": false
+  }
+]

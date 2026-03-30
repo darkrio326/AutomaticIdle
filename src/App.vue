@@ -1,37 +1,64 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
 import FlowEditor from '@/components/FlowEditor.vue';
+import ExecutionView from '@/components/ExecutionView.vue';
+import StatusPanel from '@/components/StatusPanel.vue';
 import { useRuntimeStore } from '@/stores/runtimeStore';
 
 const runtimeStore = useRuntimeStore();
 
 onMounted(() => {
   runtimeStore.initEngine();
+  runtimeStore.start();
 });
 </script>
 
 <template>
-  <div id="root">
-    <header class="app-header">
-      <h1>AutomaticIdle</h1>
-      <span class="header-sub">放置生产链游戏</span>
-    </header>
-    <FlowEditor />
+  <div class="app-layout">
+    <!-- 左：流程编辑区 -->
+    <div class="panel panel-left">
+      <FlowEditor />
+    </div>
+    <!-- 中：实时运行区 -->
+    <div class="panel panel-center">
+      <ExecutionView />
+    </div>
+    <!-- 右：状态面板 -->
+    <div class="panel panel-right">
+      <StatusPanel />
+    </div>
   </div>
 </template>
 
 <style scoped>
-.app-header {
+.app-layout {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 16px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
+  height: 100vh;
+  width: 100%;
+  background: var(--bg-root);
+  overflow: hidden;
 }
 
-.header-sub {
-  font-size: 0.82rem;
-  color: var(--muted-foreground);
+.panel {
+  height: 100%;
+  overflow: hidden;
+}
+
+.panel-left {
+  width: 300px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+}
+
+.panel-center {
+  flex: 1;
+  min-width: 0;
+}
+
+.panel-right {
+  width: 300px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
 }
 </style>

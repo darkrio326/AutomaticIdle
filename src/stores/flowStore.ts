@@ -1,17 +1,15 @@
 import { defineStore } from 'pinia';
 import resourcesArray from '@/config/resources.json';
 import recipesArray from '@/config/recipes.json';
+import sellsArray from '@/config/sells.json';
 import skillsArray from '@/config/skills.json';
-import upgradesArray from '@/config/upgrades.json';
 import ordersArray from '@/config/orders.json';
+import buildingsObj from '@/config/buildings.json';
+import toolsObj from '@/config/tools.json';
 import { simulateFlow } from '@/core/simulator';
-import {
-  canPurchaseUpgrade,
-  compareFlowBeforeAfterUpgrade,
-  purchaseUpgrade,
-} from '@/core/upgradeSystem';
 import { applyExpGains, calcRequiredExp } from '@/core/expSystem';
 import { loadSaveSnapshot, saveSnapshot } from '@/services/saveService';
+import { useBuildingStore } from './buildingStore';
 import type {
   FlowDefinition,
   FlowStep,
@@ -22,32 +20,14 @@ import type {
   ResourceConfig,
   SimulationResult,
   SkillConfig,
-  UpgradeConfig,
+  BuildingConfig,
+  ToolConfig,
 } from '@/core/types';
 
 interface FlowStepItem {
   uid: number;
   recipeId: string;
   repeat: number;
-}
-
-interface UpgradeComparisonView {
-  upgradeId: string;
-  before: {
-    totalTime: number;
-    totalGoldGained: number;
-    goldPerSecond: number;
-  };
-  after: {
-    totalTime: number;
-    totalGoldGained: number;
-    goldPerSecond: number;
-  };
-  delta: {
-    totalTime: number;
-    totalGoldGained: number;
-    goldPerSecond: number;
-  };
 }
 
 interface OfflineSettlementView {
@@ -57,12 +37,6 @@ interface OfflineSettlementView {
   resourceDelta: Record<string, number>;
   expDelta: Record<string, number>;
 }
-
-const DEFAULT_FLOW_STEP: FlowStepItem = {
-  uid: 0,
-  recipeId: 'mine_iron',
-  repeat: 10,
-};
 
 const OFFLINE_MAX_SECONDS = 4 * 60 * 60;
 
@@ -111,9 +85,6 @@ function clonePlayerState(playerState: PlayerState): PlayerState {
     inventory: { ...playerState.inventory },
     skills: Object.fromEntries(
       Object.entries(playerState.skills).map(([id, skill]) => [id, { ...skill }]),
-    ),
-    upgrades: Object.fromEntries(
-      Object.entries(playerState.upgrades).map(([id, upgrade]) => [id, { ...upgrade }]),
     ),
   };
 }
@@ -166,13 +137,38 @@ function settleOfflineProgress(
   return null;
 }
 
+function calcDisplayRecipeTimeSeconds(
+  recipe: RecipeConfig,
+  playerState: PlayerState,
+  gameConfig: GameConfig,
+): number {
+  let skillMultiplier = 1;
+  if (recipe.requiredSkillId != null) {
+    const skillConfig = gameConfig.skills[recipe.requiredSkillId];
+    const skillState = playerState.skills[recipe.requiredSkillId];
+    if (skillConfig != null && skillState != null) {
+      skillMultiplier =
+        1 - (skillState.level - 1) * skillConfig.timeReductionPerLevel;
+    }
+  }
+
+  return Math.max(0, recipe.timeSeconds * skillMultiplier);
+}
+
 function buildGameConfig(): GameConfig {
+  // 合并 recipes 和 sells 为统一的配方列表
+  const allRecipes = [
+    ...recipesArray,
+    ...sellsArray,
+  ] as RecipeConfig[];
+
   return {
     resources: toRecord(resourcesArray as ResourceConfig[]),
-    recipes: toRecord(recipesArray as RecipeConfig[]),
+    recipes: toRecord(allRecipes),
     skills: toRecord(skillsArray as SkillConfig[]),
-    upgrades: toRecord(upgradesArray as UpgradeConfig[]),
     orders: toRecord(ordersArray as OrderConfig[]),
+    buildings: buildingsObj as Record<string, BuildingConfig>,
+    tools: toolsObj as Record<string, ToolConfig>,
   };
 }
 
@@ -189,11 +185,6 @@ function buildInitialPlayerState(): PlayerState {
       smelting: { skillId: 'smelting', level: 1, exp: 0 },
       smithing: { skillId: 'smithing', level: 1, exp: 0 },
     },
-    upgrades: {
-      upgrade_mining_speed: { upgradeId: 'upgrade_mining_speed', level: 0 },
-      upgrade_smelting_speed: { upgradeId: 'upgrade_smelting_speed', level: 0 },
-      upgrade_smithing_speed: { upgradeId: 'upgrade_smithing_speed', level: 0 },
-    },
   };
 }
 
@@ -205,15 +196,12 @@ function buildInitialState() {
   const now = Date.now();
 
   if (!snapshot) {
-    const defaultSteps = [{ ...DEFAULT_FLOW_STEP, uid: stepUidSeed++ }];
     return {
       flowName: '默认流程',
-      steps: defaultSteps,
+      steps: [] as FlowStepItem[],
       result: null as SimulationResult | null,
       errorMessage: '',
       orderMessage: '',
-      upgradeMessage: '',
-      upgradeComparison: null as UpgradeComparisonView | null,
       offlineMessage: '',
       completedOrderIds: [] as string[],
       playerState: buildInitialPlayerState(),
@@ -235,8 +223,7 @@ function buildInitialState() {
       repeat: Math.max(1, Math.floor(s.repeat)),
     }));
 
-  const safeSteps =
-    restoredSteps.length > 0 ? restoredSteps : [{ ...DEFAULT_FLOW_STEP, uid: stepUidSeed++ }];
+  const safeSteps = restoredSteps;
   const restoredPlayerState = clonePlayerState(snapshot.playerState);
   const elapsedSeconds = Math.max(
     0,
@@ -289,8 +276,6 @@ function buildInitialState() {
     result: null as SimulationResult | null,
     errorMessage: '',
     orderMessage: '',
-    upgradeMessage: '',
-    upgradeComparison: null as UpgradeComparisonView | null,
     offlineMessage,
     completedOrderIds: Array.isArray(snapshot.completedOrderIds) ? snapshot.completedOrderIds : [],
     playerState: restoredPlayerState,
@@ -300,9 +285,19 @@ function buildInitialState() {
 
 export const useFlowStore = defineStore('flow', {
   state: () => buildInitialState(),
+
   getters: {
     recipeOptions(state): RecipeConfig[] {
-      return Object.values(state.gameConfig.recipes).filter((r) => r.enabled !== false);
+      const buildingStore = useBuildingStore();
+      const enabledRecipes = Object.values(state.gameConfig.recipes).filter((r) => {
+        // 检查配方本身是否启用
+        if (r.enabled === false) return false;
+        
+        // 检查是否被建筑解锁
+        const unlockedRecipeIds = buildingStore.getUnlockedRecipeIds(state.gameConfig);
+        return r.enabled !== false || unlockedRecipeIds.includes(r.id);
+      });
+      return enabledRecipes;
     },
     inventoryEntries(state): Array<[string, number]> {
       return Object.entries(state.playerState.inventory).sort(([a], [b]) => a.localeCompare(b));
@@ -318,32 +313,31 @@ export const useFlowStore = defineStore('flow', {
         steps,
       };
     },
+    displayGps(state): number {
+      let totalGold = 0;
+      let totalTime = 0;
+
+      for (const step of state.steps) {
+        const recipe = state.gameConfig.recipes[step.recipeId];
+        if (!recipe) continue;
+
+        const repeat = Math.max(1, Math.floor(step.repeat));
+        totalTime +=
+          calcDisplayRecipeTimeSeconds(recipe, state.playerState, state.gameConfig) * repeat;
+
+        for (const output of recipe.outputs) {
+          const rc = state.gameConfig.resources[output.resourceId];
+          if (rc?.type === 'currency') {
+            totalGold += output.amount * repeat;
+          }
+        }
+      }
+
+      return totalTime > 0 ? totalGold / totalTime : 0;
+    },
     canApplyResult(state): boolean {
       if (!state.result) return false;
       return canApplyResourceDelta(state.playerState.inventory, state.result.resourceDelta).ok;
-    },
-    upgradeItems(state): Array<{
-      id: string;
-      name: string;
-      currentLevel: number;
-      maxLevel: number;
-      costs: UpgradeConfig['costs'];
-      canPurchase: boolean;
-      reason?: string;
-    }> {
-      return Object.values(state.gameConfig.upgrades).map((upgrade) => {
-        const currentLevel = state.playerState.upgrades[upgrade.id]?.level ?? 0;
-        const check = canPurchaseUpgrade(state.playerState, upgrade, state.gameConfig);
-        return {
-          id: upgrade.id,
-          name: upgrade.name,
-          currentLevel,
-          maxLevel: upgrade.maxLevel,
-          costs: upgrade.costs,
-          canPurchase: check.ok,
-          reason: check.reason,
-        };
-      });
     },
     skillItems(state): Array<{
       id: string;
@@ -427,6 +421,7 @@ export const useFlowStore = defineStore('flow', {
   },
   actions: {
     persistState(): void {
+      const buildingStore = useBuildingStore();
       const unlockedRecipeIds = Object.values(this.gameConfig.recipes)
         .filter((r) => r.enabled !== false)
         .map((r) => r.id);
@@ -438,6 +433,7 @@ export const useFlowStore = defineStore('flow', {
         playerState: this.playerState,
         completedOrderIds: [...this.completedOrderIds],
         unlockedRecipeIds,
+        purchasedBuildingIds: buildingStore.getPurchasedBuildingIds(),
         lastSavedAt: Date.now(),
       });
     },
@@ -511,53 +507,6 @@ export const useFlowStore = defineStore('flow', {
       );
       this.persistState();
     },
-    buyUpgrade(upgradeId: string): void {
-      this.upgradeMessage = '';
-
-      const purchaseResult = purchaseUpgrade(this.playerState, upgradeId, this.gameConfig);
-      if (!purchaseResult.success) {
-        this.upgradeMessage = purchaseResult.reason ?? '升级购买失败';
-        return;
-      }
-
-      this.playerState = purchaseResult.nextPlayerState;
-      this.upgradeMessage = `升级成功：${upgradeId}`;
-      this.persistState();
-
-      if (this.result) {
-        this.runSimulation();
-      }
-    },
-    previewUpgradeComparison(upgradeId: string): void {
-      this.upgradeMessage = '';
-      this.upgradeComparison = null;
-
-      try {
-        const comparison = compareFlowBeforeAfterUpgrade(
-          this.flowDefinition,
-          this.playerState,
-          upgradeId,
-          this.gameConfig,
-        );
-
-        this.upgradeComparison = {
-          upgradeId: comparison.upgradeId,
-          before: {
-            totalTime: comparison.before.totalTime,
-            totalGoldGained: comparison.before.totalGoldGained,
-            goldPerSecond: comparison.before.goldPerSecond,
-          },
-          after: {
-            totalTime: comparison.after.totalTime,
-            totalGoldGained: comparison.after.totalGoldGained,
-            goldPerSecond: comparison.after.goldPerSecond,
-          },
-          delta: comparison.delta,
-        };
-      } catch (error) {
-        this.upgradeMessage = error instanceof Error ? error.message : '无法完成升级收益对比';
-      }
-    },
     submitOrder(orderId: string): void {
       this.orderMessage = '';
 
@@ -596,6 +545,58 @@ export const useFlowStore = defineStore('flow', {
 
       this.completedOrderIds.push(orderId);
       this.orderMessage = `订单提交成功：${order.name}`;
+      this.persistState();
+    },
+
+    /**
+     * 从保存快照中恢复已购建筑
+     */
+    initBuildingsFromSnapshot(): void {
+      const snapshot = loadSaveSnapshot();
+      const buildingStore = useBuildingStore();
+      if (snapshot?.purchasedBuildingIds) {
+        buildingStore.restorePurchasedBuildings(snapshot.purchasedBuildingIds);
+      }
+    },
+
+    /**
+     * 购买建筑
+     */
+    purchaseBuilding(buildingId: string): void {
+      this.errorMessage = '';
+      const buildingStore = useBuildingStore();
+
+      const check = buildingStore.canPurchaseBuilding(buildingId, this.playerState, this.gameConfig);
+      if (!check.canBuy) {
+        this.errorMessage = check.reason ?? '无法购买此建筑';
+        return;
+      }
+
+      const result = buildingStore.purchaseBuilding(buildingId, this.playerState, this.gameConfig);
+      if (!result.success) {
+        this.errorMessage = result.reason ?? '购买失败';
+        return;
+      }
+
+      // 解锁建筑对应的配方
+      const building = this.gameConfig.buildings?.[buildingId];
+      if (building?.unlock.recipes) {
+        for (const recipeId of building.unlock.recipes) {
+          if (this.gameConfig.recipes[recipeId]) {
+            this.gameConfig.recipes[recipeId].enabled = true;
+          }
+        }
+      }
+
+      this.persistState();
+    },
+
+    /**
+     * 清空已购建筑状态
+     */
+    clearPurchasedBuildings(): void {
+      const buildingStore = useBuildingStore();
+      buildingStore.clearPurchasedBuildings();
       this.persistState();
     },
   },

@@ -1,16 +1,12 @@
 [
   {
     "id": "mine_iron",
-    "name": "采矿",
+    "name": "开采铁矿",
     "category": "gather",
     "timeSeconds": 1,
     "inputs": [],
-    "outputs": [
-      { "resourceId": "iron_ore", "amount": 1 }
-    ],
-    "expGains": [
-      { "skillId": "mining", "amount": 1 }
-    ],
+    "outputs": [{ "resourceId": "iron_ore", "amount": 1 }],
+    "expGains": [{ "skillId": "mining", "amount": 1 }],
     "enabled": true
   },
   {
@@ -18,15 +14,9 @@
     "name": "熔炼铁锭",
     "category": "craft",
     "timeSeconds": 2,
-    "inputs": [
-      { "resourceId": "iron_ore", "amount": 2 }
-    ],
-    "outputs": [
-      { "resourceId": "iron_ingot", "amount": 1 }
-    ],
-    "expGains": [
-      { "skillId": "smelting", "amount": 2 }
-    ],
+    "inputs": [{ "resourceId": "iron_ore", "amount": 2 }],
+    "outputs": [{ "resourceId": "iron_ingot", "amount": 1 }],
+    "expGains": [{ "skillId": "smelting", "amount": 2 }],
     "requiredSkillId": "smelting",
     "requiredSkillLevel": 1,
     "enabled": true
@@ -36,45 +26,57 @@
     "name": "锻造铁剑",
     "category": "craft",
     "timeSeconds": 4,
-    "inputs": [
-      { "resourceId": "iron_ingot", "amount": 5 }
-    ],
-    "outputs": [
-      { "resourceId": "iron_sword", "amount": 1 }
-    ],
-    "expGains": [
-      { "skillId": "smithing", "amount": 5 }
-    ],
+    "inputs": [{ "resourceId": "iron_ingot", "amount": 5 }],
+    "outputs": [{ "resourceId": "iron_sword", "amount": 1 }],
+    "expGains": [{ "skillId": "smithing", "amount": 5 }],
     "requiredSkillId": "smithing",
     "requiredSkillLevel": 1,
-    "enabled": true
+    "enabled": false
   },
   {
-    "id": "sell_iron_ingot",
-    "name": "出售铁锭",
-    "category": "sell",
-    "timeSeconds": 0,
-    "inputs": [
-      { "resourceId": "iron_ingot", "amount": 1 }
-    ],
-    "outputs": [
-      { "resourceId": "gold", "amount": 8 }
-    ],
-    "expGains": [],
-    "enabled": true
+    "id": "mine_copper",
+    "name": "开采铜矿",
+    "category": "gather",
+    "timeSeconds": 1,
+    "inputs": [],
+    "outputs": [{ "resourceId": "copper_ore", "amount": 1 }],
+    "expGains": [{ "skillId": "mining", "amount": 1 }],
+    "enabled": false
   },
   {
-    "id": "sell_iron_sword",
-    "name": "出售铁剑",
-    "category": "sell",
-    "timeSeconds": 0,
+    "id": "smelt_copper",
+    "name": "熔炼铜锭",
+    "category": "craft",
+    "timeSeconds": 2,
+    "inputs": [{ "resourceId": "copper_ore", "amount": 2 }],
+    "outputs": [{ "resourceId": "copper_ingot", "amount": 1 }],
+    "expGains": [{ "skillId": "smelting", "amount": 2 }],
+    "requiredSkillId": "smelting",
+    "requiredSkillLevel": 10,
+    "enabled": false
+  },
+  {
+    "id": "mine_coal",
+    "name": "开采煤矿",
+    "category": "gather",
+    "timeSeconds": 1,
+    "inputs": [],
+    "outputs": [{ "resourceId": "coal_ore", "amount": 1 }],
+    "expGains": [{ "skillId": "mining", "amount": 1 }],
+    "enabled": false
+  },
+  {
+    "id": "smelt_steel",
+    "name": "熔炼钢",
+    "category": "craft",
+    "timeSeconds": 2,
     "inputs": [
-      { "resourceId": "iron_sword", "amount": 1 }
-    ],
-    "outputs": [
-      { "resourceId": "gold", "amount": 100 }
-    ],
-    "expGains": [],
-    "enabled": true
+      { "resourceId": "iron_ingot", "amount": 2 },
+      { "resourceId": "coal_ore", "amount": 1 }],
+    "outputs": [{ "resourceId": "steel_ingot", "amount": 1 }],
+    "expGains": [{ "skillId": "smelting", "amount": 2 }],
+    "requiredSkillId": "smelting",
+    "requiredSkillLevel": 10,
+    "enabled": false
   }
 ]

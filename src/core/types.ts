@@ -1,6 +1,5 @@
 export type ResourceType = "currency" | "raw" | "intermediate" | "product";
 export type RecipeCategory = "gather" | "craft" | "sell";
-export type UpgradeTargetType = "recipe_time" | "sell_bonus" | "unlock";
 
 export interface ResourceAmount {
   resourceId: string;
@@ -45,20 +44,8 @@ export interface SkillConfig {
   };
 }
 
-export interface UpgradeConfig {
-  id: string;
-  name: string;
-  targetType: UpgradeTargetType;
-  targetId: string;
-  maxLevel: number;
-  costs: ResourceAmount[];
-  effectPerLevel: number;
-  requiredSkillId?: string;
-  requiredSkillLevel?: number;
-}
-
 export interface OrderUnlock {
-  type: "recipe" | "upgrade_cap" | "feature";
+  type: "recipe" | "feature";
   id: string;
 }
 
@@ -69,6 +56,27 @@ export interface OrderConfig {
   rewards?: ResourceAmount[];
   unlocks?: OrderUnlock[];
   enabled?: boolean;
+}
+
+export interface BuildingUnlock {
+  resources?: string[];
+  recipes?: string[];
+}
+
+export interface BuildingConfig {
+  name: string;
+  cost: Record<string, number>;
+  unlock: BuildingUnlock;
+}
+
+export interface ToolEffect {
+  timeMultiplier: number;
+}
+
+export interface ToolConfig {
+  name: string;
+  cost: Record<string, number>;
+  effects: Record<string, ToolEffect>;
 }
 
 export interface FlowStep {
@@ -88,15 +96,9 @@ export interface SkillState {
   exp: number;
 }
 
-export interface UpgradeState {
-  upgradeId: string;
-  level: number;
-}
-
 export interface PlayerState {
   inventory: Record<string, number>;
   skills: Record<string, SkillState>;
-  upgrades: Record<string, UpgradeState>;
 }
 
 export interface SimulationStepResult {
@@ -122,6 +124,7 @@ export interface GameConfig {
   resources: Record<string, ResourceConfig>;
   recipes: Record<string, RecipeConfig>;
   skills: Record<string, SkillConfig>;
-  upgrades: Record<string, UpgradeConfig>;
   orders: Record<string, OrderConfig>;
+  buildings?: Record<string, BuildingConfig>;
+  tools?: Record<string, ToolConfig>;
 }

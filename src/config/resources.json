@@ -26,5 +26,33 @@
     "type": "product",
     "sellPrice": 100,
     "description": "基础成品武器"
+  },
+  {
+    "id": "copper_ore",
+    "name": "铜矿",
+    "type": "raw",
+    "sellPrice": 2,
+    "description": "基础矿物原料"
+  },
+  {
+    "id": "copper_ingot",
+    "name": "铜锭",
+    "type": "intermediate",
+    "sellPrice": 15,
+    "description": "由铜矿熔炼而成"
+  },
+  {
+    "id": "coal_ore",
+    "name": "煤矿",
+    "type": "raw",
+    "sellPrice": 3,
+    "description": "基础矿物原料"
+  },
+  {
+    "id": "steel_ingot",
+    "name": "钢",
+    "type": "intermediate",
+    "sellPrice": 40,
+    "description": "由铁矿和煤熔炼而成"
   }
 ]

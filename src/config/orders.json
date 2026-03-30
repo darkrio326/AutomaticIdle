@@ -2,23 +2,15 @@
   {
     "id": "order_ingot_01",
     "name": "给铁匠铺的铁锭订单",
-    "requirements": [
-      { "resourceId": "iron_ingot", "amount": 10 }
-    ],
-    "unlocks": [
-      { "type": "recipe", "id": "craft_iron_sword" }
-    ],
+    "requirements": [{ "resourceId": "iron_ingot", "amount": 10 }],
+    "unlocks": [{ "type": "recipe", "id": "craft_iron_sword" }],
     "enabled": true
   },
   {
     "id": "order_sword_01",
     "name": "迈尔斯想要一只铁剑",
-    "requirements": [
-      { "resourceId": "iron_sword", "amount": 2 }
-    ],
-    "rewards": [
-      { "resourceId": "gold", "amount": 500 }
-    ],
+    "requirements": [{ "resourceId": "iron_sword", "amount": 2 }],
+    "rewards": [{ "resourceId": "gold", "amount": 500 }],
     "enabled": true
   }
 ]

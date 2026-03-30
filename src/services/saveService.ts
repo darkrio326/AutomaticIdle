@@ -7,6 +7,7 @@ export interface SaveSnapshot {
   playerState: PlayerState;
   completedOrderIds: string[];
   unlockedRecipeIds: string[];
+  purchasedBuildingIds?: string[];
   lastSavedAt: number;
 }
 

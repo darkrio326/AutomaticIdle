@@ -41,6 +41,8 @@ export interface RuntimeState {
   repeatProgress: number;
   /** 流程已完整循环的次数 */
   loopCount: number;
+  /** 当前 repeat 的实际总耗时（ms），由引擎写入，供进度条使用 */
+  currentRepeatTotalMs: number;
 
   // ── 玩家状态（运行时可写副本）────────────────────────────
   /** 运行时维护的玩家状态，隔离于 flowStore 的编辑态；引擎结算后回写 flowStore */
@@ -68,6 +70,7 @@ export function createInitialRuntimeState(
     stepProgress: 0,
     repeatProgress: 0,
     loopCount: 0,
+    currentRepeatTotalMs: 0,
     playerState,
     gps: 0,
     goldInWindow: 0,

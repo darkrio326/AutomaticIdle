@@ -49,7 +49,7 @@ export const useRuntimeStore = defineStore("runtime", {
     repeatProgress: 0,
     /** 流程循环总次数 */
     loopCount: 0,
-    /** 实时 GPS（5s 滑动窗口） */
+    /** 实时 GPS（静态公式：总流程金币 / 总流程耗时） */
     gps: 0,
     /** 实时库存快照（每帧从 engine playerState 投影，不触发持久化）*/
     liveInventory: {} as Record<string, number>,
@@ -98,19 +98,24 @@ export const useRuntimeStore = defineStore("runtime", {
 
     /** 启动运行引擎 */
     start(): void {
+      const flowStore = useFlowStore();
+      if (flowStore.flowDefinition.steps.length === 0) {
+        this.stop();
+        return;
+      }
       // 每次启动前先同步最新流程和配置
       this._syncFlowToEngine();
       getEngine().start();
       this.status = "running";
     },
 
-    /** 暂停 */
+    /** 暂停（保留接口，当前 UI 不暴露） */
     pause(): void {
       getEngine().pause();
       this.status = "paused";
     },
 
-    /** 恢复 */
+    /** 恢复（保留接口，当前 UI 不暴露） */
     resume(): void {
       getEngine().resume();
       this.status = "running";
@@ -127,14 +132,26 @@ export const useRuntimeStore = defineStore("runtime", {
 
     /**
      * 流程被编辑后调用（由 FlowEditor 触发）。
-     * 运行中时写入 pendingFlow，步骤边界时生效；
-     * 未运行时直接更新 activeFlow。
+     * 规则：
+     *  - 流程为空：立即停机
+     *  - 运行中：写入 pendingFlow，步骤边界生效
+     *  - 非运行中：直接替换 activeFlow 并自动启动
      */
     notifyFlowChanged(): void {
       const flowStore = useFlowStore();
       const newFlow: FlowDefinition = JSON.parse(
         JSON.stringify(flowStore.flowDefinition)
       );
+
+      if (newFlow.steps.length === 0) {
+        this.stop();
+        const engineState = getEngine().state as RuntimeState;
+        (engineState as RuntimeState).activeFlow = newFlow;
+        (engineState as RuntimeState).pendingFlow = null;
+        this.activeFlow = newFlow;
+        this.hasPendingFlow = false;
+        return;
+      }
 
       if (this.status === "running" || this.status === "paused") {
         getEngine().setPendingFlow(newFlow);
@@ -149,6 +166,7 @@ export const useRuntimeStore = defineStore("runtime", {
         (engineState as RuntimeState).repeatProgress = 0;
         this.activeFlow = newFlow;
         this.hasPendingFlow = false;
+        this.start();
       }
     },
 
@@ -174,19 +192,8 @@ export const useRuntimeStore = defineStore("runtime", {
       // 每帧同步实时库存（仅读取，不触发持久化）
       this.liveInventory = { ...state.playerState.inventory };
 
-      // 计算当前 repeat 总耗时（用于进度条）
-      if (state.activeFlow != null) {
-        const step = state.activeFlow.steps[state.stepIndex];
-        if (step != null) {
-          const flowStore = useFlowStore();
-          const recipe = flowStore.gameConfig.recipes[step.recipeId];
-          if (recipe != null) {
-            // 简化：直接用 recipe.timeSeconds * 1000（不含加速，可后续精化）
-            // 进度条视觉目的可容忍微小误差
-            this.currentRepeatTotalMs = recipe.timeSeconds * 1000;
-          }
-        }
-      }
+      // 直接使用引擎写入的精确值（含技能/升级加速）
+      this.currentRepeatTotalMs = state.currentRepeatTotalMs;
 
       // 定时将引擎 playerState 同步回 flowStore（触发持久化）
       const now = performance.now();

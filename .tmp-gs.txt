@@ -1,0 +1,17 @@
+ M .DS_Store
+ M docs/.DS_Store
+ M docs/CHANGELOG.md
+ M docs/process/iteration-idea-backlog.md
+?? .tmp-build.log
+?? .tmp-dev.log
+?? .tmp-gs.txt
+?? .tmp-now.txt
+?? dist/
+?? docs/prototype/.DS_Store
+?? docs/prototype/package.json
+?? docs/prototype/postcss.config.mjs
+?? docs/prototype/src/
+?? docs/prototype/vite.config.ts
+?? docs/versions/v0.1-plan.md
+?? node_modules/.vite/
+?? node_modules/.vue-global-types/

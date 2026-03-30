@@ -5,10 +5,7 @@
     "baseLevel": 1,
     "timeReductionPerLevel": 0.02,
     "maxLevel": 50,
-    "expFormula": {
-      "base": 10,
-      "exponent": 1.5
-    }
+    "expFormula": { "base": 10, "exponent": 1.5 }
   },
   {
     "id": "smelting",
@@ -16,10 +13,7 @@
     "baseLevel": 1,
     "timeReductionPerLevel": 0.02,
     "maxLevel": 50,
-    "expFormula": {
-      "base": 10,
-      "exponent": 1.5
-    }
+    "expFormula": { "base": 10, "exponent": 1.5 }
   },
   {
     "id": "smithing",
@@ -27,9 +21,6 @@
     "baseLevel": 1,
     "timeReductionPerLevel": 0.02,
     "maxLevel": 50,
-    "expFormula": {
-      "base": 10,
-      "exponent": 1.5
-    }
+    "expFormula": { "base": 10, "exponent": 1.5 }
   }
 ]

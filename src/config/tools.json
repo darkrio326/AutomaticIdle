@@ -1,0 +1,51 @@
+{
+  "copper_pickaxe": {
+    "name": "铜镐",
+    "cost": { "copper_ingot": 10 },
+    "effects": {
+      "mine_iron": { "timeMultiplier": 0.7 },
+      "mine_copper": { "timeMultiplier": 0.7 }
+    }
+  },
+  "copper_furnace": {
+    "name": "铜制熔炉",
+    "cost": { "copper_ingot": 15 },
+    "effects": {
+      "smelt_iron": { "timeMultiplier": 0.8 },
+      "smelt_copper": { "timeMultiplier": 0.8 }
+    }
+  },
+  "steel_pickaxe": {
+    "name": "钢镐",
+    "cost": {
+      "steel_ingot": 10
+    },
+    "effects": {
+      "mine_iron": { "timeMultiplier": 0.5 },
+      "mine_copper": { "timeMultiplier": 0.5 },
+      "mine_coal": { "timeMultiplier": 0.6 }
+    }
+  },
+
+  "steel_furnace_upgrade": {
+    "name": "高效高温炉",
+    "cost": {
+      "steel_ingot": 15
+    },
+    "effects": {
+      "smelt_iron": { "timeMultiplier": 0.6 },
+      "smelt_copper": { "timeMultiplier": 0.6 },
+      "smelt_steel": { "timeMultiplier": 0.7 }
+    }
+  },
+
+  "steel_anvil": {
+    "name": "钢铁锻造台",
+    "cost": {
+      "steel_ingot": 20
+    },
+    "effects": {
+      "craft_iron_sword": { "timeMultiplier": 0.5 }
+    }
+  }
+}
