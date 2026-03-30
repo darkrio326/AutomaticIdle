@@ -47,20 +47,25 @@ function calcActualStepTime(
     }
   }
 
-  let upgradeMultiplier = 1;
-  for (const upgradeConfig of Object.values(config.upgrades)) {
-    if (
-      upgradeConfig.targetType === "recipe_time" &&
-      upgradeConfig.targetId === recipe.id
-    ) {
-      const upgradeState = state.playerState.upgrades[upgradeConfig.id];
-      if (upgradeState != null && upgradeState.level > 0) {
-        upgradeMultiplier *= 1 - upgradeState.level * upgradeConfig.effectPerLevel;
+  // 工具倍率：同一配方只取最高 tier 已购工具
+  let toolMultiplier = 1;
+  const purchasedTools = state.playerState.purchasedTools;
+  if (purchasedTools && config.tools) {
+    let bestTier = -1;
+    for (const toolId of purchasedTools) {
+      const toolConfig = config.tools[toolId];
+      if (!toolConfig) continue;
+      const effect = toolConfig.effects[recipe.id];
+      if (!effect) continue;
+      const tier = toolConfig.tier ?? 0;
+      if (tier > bestTier) {
+        bestTier = tier;
+        toolMultiplier = effect.timeMultiplier;
       }
     }
   }
 
-  return Math.max(0.1, recipe.timeSeconds * skillMultiplier * upgradeMultiplier);
+  return Math.max(0.1, recipe.timeSeconds * skillMultiplier * toolMultiplier);
 }
 
 // ─── 单步动作执行器（ITER-016 / ITER-017）────────────────────────────────────

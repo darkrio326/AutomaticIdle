@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { useFlowStore } from '@/stores/flowStore';
 import { useRuntimeStore } from '@/stores/runtimeStore';
 import BuildingPanel from './BuildingPanel.vue';
+import ToolPanel from './ToolPanel.vue';
 
 const flowStore = useFlowStore();
 const runtimeStore = useRuntimeStore();
@@ -204,6 +205,9 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
 
     <!-- ── 建筑系统 ── -->
     <BuildingPanel />
+
+    <!-- ── 工具系统 ── -->
+    <ToolPanel />
 
     <!-- ── 订单任务 ── -->
     <section class="panel-section">

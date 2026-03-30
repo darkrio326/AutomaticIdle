@@ -2,6 +2,7 @@
   "iron_pickaxe": {
     "tier": 1,
     "name": "铁镐",
+    "cost": { "iron_ingot": 10 },
     "effects": {
       "mine_iron": { "timeMultiplier": 0.9 }
     }

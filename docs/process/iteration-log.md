@@ -46,6 +46,54 @@
 
 ## 迭代记录
 
+### ITER-026 工具 UI 面板（列表、购买交互、加速效果说明）
+- 日期：2026-03-30
+- 所属版本：v0.2
+- 所属阶段：Phase 3
+- 类型：能力增强
+- 目标：实现工具 UI 面板，展示全部工具的 tier、费用、加速效果及已购状态；集成 StatusPanel；同时修复 runtimeEngine.ts 残留升级系统代码（upgradeMultiplier）并补全工具倍率接入。
+- 改动范围：
+  - 新建 `src/components/ToolPanel.vue`（工具 UI 面板组件）
+  - 修改 `src/components/StatusPanel.vue`（导入 ToolPanel，插入建筑面板之后）
+  - 修复 `src/core/runtimeEngine.ts`（移除 upgradeMultiplier 残留循环，改写为工具倍率逻辑，取同一配方最高 tier 已购工具）
+  - 修复 `src/config/tools.json`（补全 `iron_pickaxe.cost` 字段）
+- 未改动范围：store 层、engine 数据结构、其他组件
+- 完成内容：
+  - `ToolPanel.vue` 实现：读取 `flowStore.gameConfig.tools`，展示 tier 徽标、费用（免费/资源）、加速效果标签（配方名 + 速度百分比）、购买状态，购买按钮调用 `flowStore.purchaseTool()`
+  - `runtimeEngine.ts` 修复：`calcActualStepTime` 移除 `config.upgrades` 引用（运行时 crash 修复），改为遍历 `purchasedTools` 取最高 tier 工具倍率叠加技能倍率
+  - vue-tsc --noEmit 无报错
+- 未完成内容：无
+- 测试情况：类型检查通过
+- 风险与注意事项：
+  - runtimeEngine 之前引用已删除的 `config.upgrades`，会导致运行时 TypeError，本次一并修复
+  - 工具倍率与技能倍率叠加：`finalTime = baseTime × skillMultiplier × toolMultiplier`，最低下限 0.1s
+- 回滚方式：删除 ToolPanel.vue，还原 StatusPanel.vue 和 runtimeEngine.ts 改动
+- 结论：ITER-026 完成，工具 UI 面板就位，引擎工具倍率接入完整
+- 下一步建议：手动测试购买工具后引擎耗时变化，进入 ITER-027（动态订单重构）
+
+---
+
+### ITER-025 工具 Store + 引擎接入（已在 v0.2 Tool System 提交中完成）
+- 日期：2026-03-30
+- 所属版本：v0.2
+- 所属阶段：Phase 3
+- 类型：能力增强
+- 目标：建立工具 Store，实现购买工具、同配方最高 tier 选取、flowStore 集成。
+- 改动范围：
+  - 新建 `src/stores/toolStore.ts`（Pinia Store）
+  - 修改 `src/core/types.ts`（`ToolConfig` 新增 `tier?`，`PlayerState` 新增 `purchasedTools?`）
+  - 修改 `src/services/saveService.ts`（`SaveSnapshot` 新增 `purchasedToolIds?`）
+  - 修改 `src/stores/flowStore.ts`（集成 toolStore，更新 `calcDisplayRecipeTimeSeconds`，新增 `skillItems` 工具字段，新增三个 action）
+  - 修改 `src/components/SkillPanel.vue`（展示 `skillBonusPercent / applicableTools / combinedBonusPercent`）
+- 未改动范围：runtimeEngine.ts（ITER-026 中补全）
+- 完成内容：toolStore 全量实现；flowStore 集成工具效果展示；类型检查通过
+- 未完成内容：runtimeEngine.ts 工具倍率接入（ITER-026 补完）
+- 测试情况：类型检查通过
+- 结论：ITER-025 完成（Store + display 侧），引擎侧在 ITER-026 补全
+- 下一步建议：已在 ITER-026 中补全 runtimeEngine 侧
+
+---
+
 ### ITER-024 建筑 UI 面板（列表、购买交互、解锁提示）
 - 日期：2026-03-30
 - 所属版本：v0.2
