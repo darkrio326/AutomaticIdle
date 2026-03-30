@@ -58,6 +58,26 @@ export interface OrderConfig {
   enabled?: boolean;
 }
 
+export interface OrderTemplate {
+  id: string;
+  rarity: 'common' | 'uncommon' | 'rare';
+  weight: number;
+  requirementPool: Array<{ resourceId: string; min: number; max: number }>;
+  rewardPool: Array<{ resourceId: string; min: number; max: number }>;
+  durationSeconds: { min: number; max: number };
+}
+
+export interface ActiveOrder {
+  instanceId: string;
+  templateId: string;
+  name: string;
+  rarity: 'common' | 'uncommon' | 'rare';
+  requirements: ResourceAmount[];
+  rewards: ResourceAmount[];
+  expiresAt: number;
+  createdAt: number;
+}
+
 export interface BuildingUnlock {
   resources?: string[];
   recipes?: string[];
@@ -126,7 +146,7 @@ export interface GameConfig {
   resources: Record<string, ResourceConfig>;
   recipes: Record<string, RecipeConfig>;
   skills: Record<string, SkillConfig>;
-  orders: Record<string, OrderConfig>;
+  orders?: Record<string, OrderConfig>;
   buildings?: Record<string, BuildingConfig>;
   tools?: Record<string, ToolConfig>;
 }

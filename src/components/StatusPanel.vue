@@ -1,14 +1,48 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useFlowStore } from '@/stores/flowStore';
 import { useRuntimeStore } from '@/stores/runtimeStore';
+import { useOrderStore } from '@/stores/orderStore';
+import type { ActiveOrder } from '@/core/types';
 import BuildingPanel from './BuildingPanel.vue';
 import ToolPanel from './ToolPanel.vue';
 
 const flowStore = useFlowStore();
 const runtimeStore = useRuntimeStore();
+const orderStore = useOrderStore();
 
 const ordersExpanded = ref(false);
+
+/** 订单时钟刷新 */
+const now = ref(Date.now());
+let nowTimer: number | null = null;
+onMounted(() => { nowTimer = window.setInterval(() => { now.value = Date.now(); }, 1000); });
+onUnmounted(() => { if (nowTimer !== null) window.clearInterval(nowTimer); });
+
+const slotInfos = computed(() =>
+  [0, 1, 2].map((i) => orderStore.getSlotInfo(i, now.value))
+);
+
+const activeOrderCount = computed(() =>
+  slotInfos.value.filter((s) => s.status === 'active').length
+);
+
+function canSubmitOrder(order: ActiveOrder): boolean {
+  for (const req of order.requirements) {
+    if ((flowStore.playerState.inventory[req.resourceId] ?? 0) < req.amount) return false;
+  }
+  return true;
+}
+
+function rarityLabel(rarity: string): string {
+  return { common: '普通', uncommon: '稀有', rare: '极少' }[rarity] ?? rarity;
+}
+
+function formatTime(ms: number): string {
+  const s = Math.ceil(ms / 1000);
+  if (s >= 60) return `${Math.floor(s / 60)}m${s % 60}s`;
+  return `${s}s`;
+}
 
 /** 资源显示顺序 */
 const RESOURCE_ORDER = ['gold', 'iron_ore', 'iron_ingot', 'iron_sword'];
@@ -214,34 +248,63 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
       <button class="orders-toggle" @click="ordersExpanded = !ordersExpanded">
         <span class="section-icon">📋</span>
         <span class="section-title">订单任务</span>
-        <span class="orders-count">{{ flowStore.orderItems.filter(o => !o.completed).length }} 进行中</span>
+        <span class="orders-count">{{ activeOrderCount }} 进行中</span>
         <span class="toggle-arrow" :class="{ expanded: ordersExpanded }">›</span>
       </button>
       <div v-if="ordersExpanded" class="orders-list">
-        <p v-if="flowStore.orderMessage" class="msg-tip">{{ flowStore.orderMessage }}</p>
-        <div v-for="order in flowStore.orderItems" :key="order.id" class="order-card" :class="{ 'order-done': order.completed }">
-          <div class="order-name">{{ order.name }}</div>
-          <div class="order-row">
-            <span class="order-label">需求:</span>
-            <span class="order-val">{{ formatResources(order.requirements) }}</span>
+        <p v-if="flowStore.errorMessage" class="msg-tip">{{ flowStore.errorMessage }}</p>
+        <div v-for="slot in slotInfos" :key="slot.slotIndex" class="order-slot">
+          <!-- 冷却中 -->
+          <div v-if="slot.status === 'cooldown'" class="order-slot-wait">
+            <span class="slot-wait-icon">⏳</span>
+            <span class="slot-wait-text">下个订单 {{ formatTime(slot.cooldownRemainMs ?? 0) }}</span>
           </div>
-          <div v-if="order.rewards && order.rewards.length > 0" class="order-row">
-            <span class="order-label">奖励:</span>
-            <span class="order-val">{{ formatResources(order.rewards) }}</span>
+          <!-- 空插槽 / 生成中 -->
+          <div v-else-if="slot.status === 'empty'" class="order-slot-wait">
+            <span class="slot-wait-icon">…</span>
+            <span class="slot-wait-text">生成新订单中</span>
           </div>
-          <div v-if="order.unlocks && order.unlocks.length > 0" class="order-row">
-            <span class="order-label">解锁:</span>
-            <span class="order-val unlock">{{ formatUnlocks(order.unlocks) }}</span>
+          <!-- 已过期 -->
+          <div v-else-if="slot.status === 'expired' && slot.order" class="order-card order-expired">
+            <div class="order-header">
+              <span class="order-name">{{ slot.order.name }}</span>
+              <span class="order-rarity" :class="'rarity-' + slot.order.rarity">{{ rarityLabel(slot.order.rarity) }}</span>
+            </div>
+            <div class="order-row"><span class="order-label">订单已过期</span></div>
+            <div class="order-actions">
+              <button class="btn-order-discard" @click="flowStore.deleteOrder(slot.order.instanceId)">删除</button>
+            </div>
           </div>
-          <div v-if="order.completed" class="order-completed">✓ 已完成</div>
-          <button
-            v-else
-            class="btn-order"
-            :disabled="!order.canSubmit"
-            @click="flowStore.submitOrder(order.id)"
-          >
-            {{ order.canSubmit ? '提交订单' : '条件不足' }}
-          </button>
+          <!-- 活跃订单 -->
+          <div v-else-if="slot.status === 'active' && slot.order" class="order-card">
+            <div class="order-header">
+              <span class="order-name">{{ slot.order.name }}</span>
+              <span class="order-rarity" :class="'rarity-' + slot.order.rarity">{{ rarityLabel(slot.order.rarity) }}</span>
+            </div>
+            <div class="order-row">
+              <span class="order-label">需求:</span>
+              <span class="order-val">{{ formatResources(slot.order.requirements) }}</span>
+            </div>
+            <div class="order-row">
+              <span class="order-label">奖励:</span>
+              <span class="order-val order-reward">{{ formatResources(slot.order.rewards) }}</span>
+            </div>
+            <div class="order-row">
+              <span class="order-label">剩余:</span>
+              <span
+                class="order-val"
+                :class="{ 'order-expiring': slot.order.expiresAt - now < 60_000 }"
+              >{{ formatTime(slot.order.expiresAt - now) }}</span>
+            </div>
+            <div class="order-actions">
+              <button
+                class="btn-order"
+                :disabled="!canSubmitOrder(slot.order)"
+                @click="flowStore.submitOrder(slot.order.instanceId)"
+              >提交</button>
+              <button class="btn-order-discard" @click="flowStore.deleteOrder(slot.order.instanceId)">丢弃</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -574,5 +637,83 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
   background: var(--bg-card-50);
   color: var(--text-dim);
   border-color: var(--border-50);
+}
+
+/* ── 动态订单插槽 ── */
+.order-slot {
+  display: flex;
+  flex-direction: column;
+}
+
+.order-slot-wait {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-card-50);
+  border: 1px dashed var(--border-50);
+  border-radius: var(--r-md);
+  color: var(--text-dim);
+}
+
+.slot-wait-icon { font-size: 12px; }
+
+.slot-wait-text {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.order-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.order-rarity {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rarity-common { background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100,116,139,0.3); }
+.rarity-uncommon { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); }
+.rarity-rare { background: rgba(168, 85, 247, 0.15); color: #c4b5fd; border: 1px solid rgba(168,85,247,0.3); }
+
+.order-reward { color: var(--emerald); }
+
+.order-expiring { color: var(--red); font-weight: 700; }
+
+.order-expired { opacity: 0.6; border-color: rgba(239,68,68,0.3); }
+
+.order-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.order-actions .btn-order {
+  flex: 1;
+  margin-top: 0;
+}
+
+.btn-order-discard {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-order-discard:hover {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fee2e2;
 }
 </style>

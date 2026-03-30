@@ -29,6 +29,30 @@
 - 下一步建议：
 ```
 
+---
+
+### ITER-027/028 动态订单系统（v0.2 Phase 4）
+- 日期：2026-03-31
+- 所属版本：v0.2
+- 所属阶段：Phase 4
+- 类型：能力增强
+- 目标：将原有静态 orders.json（已缺失）替换为基于 ordersTemplate.json 的动态随机订单系统，实现三槽位、有效期倒计时、稀有度权重生成、提交/丢弃/冷却机制
+- 改动范围：
+  - `src/core/types.ts` 新增 OrderTemplate / ActiveOrder 接口，GameConfig.orders 改为可选
+  - `src/services/saveService.ts` 新增 OrderSlotSnapshot 类型，SaveSnapshot 添加 orderSlots?，completedOrderIds? 改为可选（向后兼容）
+  - `src/stores/orderStore.ts`（新建）：Pinia Store 管理 3 个插槽，含 tick/startTick/stopTick/completeOrder/deleteOrder/restoreFromSnapshot/getSnapshotSlots，加权随机生成订单、冷却计时
+  - `src/stores/flowStore.ts`：移除 ordersArray 导入、OrderConfig 类型、orders 配置、orderMessage/completedOrderIds 状态、orderItems getter、旧 submitOrder；新增 submitOrder（动态版）、deleteOrder、initOrdersFromSnapshot；persistState 改用 orderStore.getSnapshotSlots()
+  - `src/components/StatusPanel.vue`：脚本区新增 orderStore、now ref 计时器、slotInfos computed、canSubmitOrder/rarityLabel/formatTime 函数；订单 template 重写为三槽位卡片（稀有度徽标、需求/奖励/剩余时间、提交+丢弃按钮、冷却/空槽状态）；添加订单插槽 CSS
+  - `src/App.vue`：onMounted 新增 initBuildingsFromSnapshot / initToolsFromSnapshot / initOrdersFromSnapshot / orderStore.startTick() 调用（修复刷新后建筑/工具/订单状态丢失的存量 bug）
+- 未改动范围：OrderPanel.vue（孤立组件，不影响运行）
+- 完成内容：全部主计划落地；顺带修复建筑/工具刷新丢失存量 bug（App.vue 未调用恢复函数）
+- 未完成内容：无
+- 测试情况：vue-tsc --noEmit 通过，无类型错误
+- 风险与注意事项：旧存档中若有 completedOrderIds 字段可安全忽略（字段已为 optional）；localStorage 中旧订单数据需刷新一次后方可重建插槽
+- 回滚方式：git revert 本次 commit
+- 结论：动态订单三槽系统完整接入，订单在 1s tick 内自动生成/过期/冷却，UI 实时显示剩余时间
+- 下一步建议：Phase 5 可选 ITER-029（资源扩展/煤炭链路）或 ITER-030（离线收益 v2）
+
 ## 与迭代工作流模板的边界
 
 - `迭代工作流`：执行前流程与门禁

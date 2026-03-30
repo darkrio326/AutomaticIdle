@@ -10,6 +10,7 @@
 ## [Unreleased]
 
 ### 变更
+- [2026-03-31 +0800] **ITER-027/028** 动态订单系统（v0.2 Phase 4）：新建 `src/stores/orderStore.ts`（3 插槽、加权随机生成、有效期倒计时、Submit→10s / Delete→120s / Expire→30s 冷却）；`types.ts` 新增 OrderTemplate / ActiveOrder 接口；`saveService.ts` 新增 OrderSlotSnapshot，SaveSnapshot 添加 orderSlots?；`flowStore.ts` 移除静态订单体系（ordersArray、orderItems getter、旧 submitOrder、completedOrderIds），接入 orderStore 的 submitOrder / deleteOrder / initOrdersFromSnapshot；`StatusPanel.vue` 订单区重写为三槽位卡片 UI（稀有度徽标、需求/奖励/倒计时、提交+丢弃）；`App.vue` 补齐 initBuildingsFromSnapshot / initToolsFromSnapshot / initOrdersFromSnapshot / orderStore.startTick() 调用（顺带修复刷新后建筑/工具状态丢失的存量 bug）。类型检查通过。
 - [2026-03-30 +0800] **ITER-026** 工具 UI 面板（v0.2 Phase 3）：新建 `ToolPanel.vue`，展示工具 tier 徽标、费用、加速效果（配方名 + 速度百分比）、已购状态及购买按钮；`StatusPanel.vue` 集成 ToolPanel；修复 `runtimeEngine.ts` 中残留的 `upgradeMultiplier` 循环（config.upgrades 已删除，运行时 crash 修复），改写为工具倍率逻辑（遍历 purchasedTools 取最高 tier）；修复 `tools.json` `iron_pickaxe.cost` 字段。类型检查通过。
 - [2026-03-30 +0800] 小修改：`src/config/tools.json` 补全 `iron_pickaxe.cost` 字段（`iron_ingot: 10`），原字段缺失导致铁镐无法正常被购买逻辑识别。
 - [2026-03-30 +0800] **ITER-024** 建筑 UI 面板（v0.2 Phase 2）：新建 `BuildingPanel.vue`，展示建筑列表、费用验证、购买交互、解锁内容标签；`StatusPanel.vue` 集成 BuildingPanel，移除升级系统 UI 与 upgradeMultiplier 残留逻辑，技能卡片扩展工具信息与综合效率加成显示；`SkillPanel.vue` 更新为使用 skillBonusPercent / applicableTools / combinedBonusPercent；CSS 移除升级系统样式，新增工具信息样式类。类型检查通过。

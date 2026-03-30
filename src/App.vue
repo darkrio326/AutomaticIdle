@@ -4,12 +4,23 @@ import FlowEditor from '@/components/FlowEditor.vue';
 import ExecutionView from '@/components/ExecutionView.vue';
 import StatusPanel from '@/components/StatusPanel.vue';
 import { useRuntimeStore } from '@/stores/runtimeStore';
+import { useFlowStore } from '@/stores/flowStore';
+import { useOrderStore } from '@/stores/orderStore';
 
 const runtimeStore = useRuntimeStore();
+const flowStore = useFlowStore();
+const orderStore = useOrderStore();
 
 onMounted(() => {
+  // 恢复建筑 / 工具 / 订单持久化状态
+  flowStore.initBuildingsFromSnapshot();
+  flowStore.initToolsFromSnapshot();
+  flowStore.initOrdersFromSnapshot();
+
+  // 启动引擎 + 订单计时器
   runtimeStore.initEngine();
   runtimeStore.start();
+  orderStore.startTick(flowStore.gameConfig);
 });
 </script>
 

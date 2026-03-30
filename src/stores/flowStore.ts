@@ -3,7 +3,6 @@ import resourcesArray from '@/config/resources.json';
 import recipesArray from '@/config/recipes.json';
 import sellsArray from '@/config/sells.json';
 import skillsArray from '@/config/skills.json';
-import ordersArray from '@/config/orders.json';
 import buildingsObj from '@/config/buildings.json';
 import toolsObj from '@/config/tools.json';
 import { simulateFlow } from '@/core/simulator';
@@ -11,11 +10,11 @@ import { applyExpGains, calcRequiredExp } from '@/core/expSystem';
 import { loadSaveSnapshot, saveSnapshot } from '@/services/saveService';
 import { useBuildingStore } from './buildingStore';
 import { useToolStore } from './toolStore';
+import { useOrderStore } from './orderStore';
 import type {
   FlowDefinition,
   FlowStep,
   GameConfig,
-  OrderConfig,
   PlayerState,
   RecipeConfig,
   ResourceConfig,
@@ -178,7 +177,6 @@ function buildGameConfig(): GameConfig {
     resources: toRecord(resourcesArray as ResourceConfig[]),
     recipes: toRecord(allRecipes),
     skills: toRecord(skillsArray as SkillConfig[]),
-    orders: toRecord(ordersArray as OrderConfig[]),
     buildings: buildingsObj as Record<string, BuildingConfig>,
     tools: toolsObj as Record<string, ToolConfig>,
   };
@@ -214,9 +212,7 @@ function buildInitialState() {
       steps: [] as FlowStepItem[],
       result: null as SimulationResult | null,
       errorMessage: '',
-      orderMessage: '',
       offlineMessage: '',
-      completedOrderIds: [] as string[],
       playerState: buildInitialPlayerState(),
       gameConfig,
     };
@@ -278,10 +274,10 @@ function buildInitialState() {
     flowName: snapshot.flowName || '默认流程',
     steps: safeSteps.map((s) => ({ recipeId: s.recipeId, repeat: s.repeat })),
     playerState: restoredPlayerState,
-    completedOrderIds: Array.isArray(snapshot.completedOrderIds) ? snapshot.completedOrderIds : [],
     unlockedRecipeIds,
     purchasedBuildingIds: snapshot.purchasedBuildingIds,
     purchasedToolIds: snapshot.purchasedToolIds,
+    orderSlots: snapshot.orderSlots,
     lastSavedAt: now,
   });
 
@@ -290,9 +286,7 @@ function buildInitialState() {
     steps: safeSteps,
     result: null as SimulationResult | null,
     errorMessage: '',
-    orderMessage: '',
     offlineMessage,
-    completedOrderIds: Array.isArray(snapshot.completedOrderIds) ? snapshot.completedOrderIds : [],
     playerState: restoredPlayerState,
     gameConfig,
   };
@@ -434,51 +428,12 @@ export const useFlowStore = defineStore('flow', {
         };
       });
     },
-    orderItems(state): Array<{
-      id: string;
-      name: string;
-      requirements: OrderConfig['requirements'];
-      rewards: NonNullable<OrderConfig['rewards']>;
-      unlocks: NonNullable<OrderConfig['unlocks']>;
-      completed: boolean;
-      canSubmit: boolean;
-      reason?: string;
-    }> {
-      return Object.values(state.gameConfig.orders)
-        .filter((o) => o.enabled !== false)
-        .map((order) => {
-          const completed = state.completedOrderIds.includes(order.id);
-          if (completed) {
-            return {
-              id: order.id,
-              name: order.name,
-              requirements: order.requirements,
-              rewards: order.rewards ?? [],
-              unlocks: order.unlocks ?? [],
-              completed,
-              canSubmit: false,
-              reason: '订单已完成',
-            };
-          }
-
-          const check = canSubmitOrderRequirements(state.playerState.inventory, order.requirements);
-          return {
-            id: order.id,
-            name: order.name,
-            requirements: order.requirements,
-            rewards: order.rewards ?? [],
-            unlocks: order.unlocks ?? [],
-            completed,
-            canSubmit: check.ok,
-            reason: check.reason,
-          };
-        });
-    },
   },
   actions: {
     persistState(): void {
       const buildingStore = useBuildingStore();
       const toolStore = useToolStore();
+      const orderStore = useOrderStore();
       const unlockedRecipeIds = Object.values(this.gameConfig.recipes)
         .filter((r) => r.enabled !== false)
         .map((r) => r.id);
@@ -488,10 +443,10 @@ export const useFlowStore = defineStore('flow', {
         flowName: this.flowName,
         steps: this.steps.map((s) => ({ recipeId: s.recipeId, repeat: s.repeat })),
         playerState: this.playerState,
-        completedOrderIds: [...this.completedOrderIds],
         unlockedRecipeIds,
         purchasedBuildingIds: buildingStore.getPurchasedBuildingIds(),
         purchasedToolIds: toolStore.getPurchasedToolIds(),
+        orderSlots: orderStore.getSnapshotSlots(),
         lastSavedAt: Date.now(),
       });
     },
@@ -565,23 +520,17 @@ export const useFlowStore = defineStore('flow', {
       );
       this.persistState();
     },
-    submitOrder(orderId: string): void {
-      this.orderMessage = '';
-
-      if (this.completedOrderIds.includes(orderId)) {
-        this.orderMessage = `订单已完成：${orderId}`;
-        return;
-      }
-
-      const order = this.gameConfig.orders[orderId];
-      if (!order || order.enabled === false) {
-        this.orderMessage = `订单不存在或未启用：${orderId}`;
+    submitOrder(instanceId: string): void {
+      const orderStore = useOrderStore();
+      const order = orderStore.getOrderByInstanceId(instanceId);
+      if (!order) {
+        this.errorMessage = '订单不存在或已过期';
         return;
       }
 
       const check = canSubmitOrderRequirements(this.playerState.inventory, order.requirements);
       if (!check.ok) {
-        this.orderMessage = check.reason ?? '资源不足，无法提交订单';
+        this.errorMessage = check.reason ?? '资源不足，无法提交订单';
         return;
       }
 
@@ -590,20 +539,27 @@ export const useFlowStore = defineStore('flow', {
           (this.playerState.inventory[req.resourceId] ?? 0) - req.amount;
       }
 
-      for (const reward of order.rewards ?? []) {
+      for (const reward of order.rewards) {
         this.playerState.inventory[reward.resourceId] =
           (this.playerState.inventory[reward.resourceId] ?? 0) + reward.amount;
       }
 
-      for (const unlock of order.unlocks ?? []) {
-        if (unlock.type === 'recipe' && this.gameConfig.recipes[unlock.id]) {
-          this.gameConfig.recipes[unlock.id].enabled = true;
-        }
-      }
-
-      this.completedOrderIds.push(orderId);
-      this.orderMessage = `订单提交成功：${order.name}`;
+      orderStore.completeOrder(instanceId);
       this.persistState();
+    },
+
+    deleteOrder(instanceId: string): void {
+      const orderStore = useOrderStore();
+      orderStore.deleteOrder(instanceId);
+      this.persistState();
+    },
+
+    initOrdersFromSnapshot(): void {
+      const snapshot = loadSaveSnapshot();
+      const orderStore = useOrderStore();
+      if (snapshot?.orderSlots) {
+        orderStore.restoreFromSnapshot(snapshot.orderSlots);
+      }
     },
 
     /**

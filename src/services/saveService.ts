@@ -1,14 +1,21 @@
-import type { PlayerState } from '@/core/types';
+import type { PlayerState, ActiveOrder } from '@/core/types';
+
+export interface OrderSlotSnapshot {
+  slotIndex: number;
+  order: ActiveOrder | null;
+  cooldownEndsAt: number | null;
+}
 
 export interface SaveSnapshot {
   version: 1;
   flowName: string;
   steps: Array<{ recipeId: string; repeat: number }>;
   playerState: PlayerState;
-  completedOrderIds: string[];
+  completedOrderIds?: string[];
   unlockedRecipeIds: string[];
   purchasedBuildingIds?: string[];
   purchasedToolIds?: string[];
+  orderSlots?: OrderSlotSnapshot[];
   lastSavedAt: number;
 }
 
