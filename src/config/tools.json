@@ -17,7 +17,7 @@
   },
   "copper_furnace": {
     "tier": 2,
-    "name": "铜制熔炉",
+    "name": "熔炉",
     "cost": { "copper_ingot": 15 },
     "effects": {
       "smelt_iron": { "timeMultiplier": 0.8 },

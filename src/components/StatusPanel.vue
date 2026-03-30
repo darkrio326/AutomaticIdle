@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { useFlowStore } from '@/stores/flowStore';
 import { useRuntimeStore } from '@/stores/runtimeStore';
+import BuildingPanel from './BuildingPanel.vue';
 
 const flowStore = useFlowStore();
 const runtimeStore = useRuntimeStore();
@@ -31,20 +32,7 @@ function calcActualRecipeTimeSeconds(recipeId: string): number {
     }
   }
 
-  let upgradeMultiplier = 1;
-  for (const upgradeConfig of Object.values(flowStore.gameConfig.upgrades)) {
-    if (
-      upgradeConfig.targetType === 'recipe_time' &&
-      upgradeConfig.targetId === recipe.id
-    ) {
-      const upgradeState = flowStore.playerState.upgrades[upgradeConfig.id];
-      if (upgradeState != null && upgradeState.level > 0) {
-        upgradeMultiplier *= 1 - upgradeState.level * upgradeConfig.effectPerLevel;
-      }
-    }
-  }
-
-  return Math.max(0, recipe.timeSeconds * skillMultiplier * upgradeMultiplier);
+  return Math.max(0, recipe.timeSeconds * skillMultiplier);
 }
 
 const flowRateMap = computed(() => {
@@ -185,7 +173,7 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
             <div class="skill-name">{{ skill.name }}</div>
             <div class="skill-meta">
               <span class="skill-level">Lv.{{ skill.level }}</span>
-              <span class="skill-bonus">-{{ skill.timeBonusPercent.toFixed(0) }}% 耗时</span>
+              <span class="skill-bonus">-{{ skill.skillBonusPercent.toFixed(0) }}% 耗时</span>
             </div>
           </div>
           <div class="exp-track">
@@ -197,35 +185,25 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
             </template>
             <template v-else>已满级</template>
           </div>
+          <!-- 显示工具加速 -->
+          <div v-if="skill.applicableTools.length > 0" class="tool-info">
+            <div class="tool-label">工具加速:</div>
+            <div class="tool-list">
+              <span v-for="tool in skill.applicableTools" :key="tool.toolId" class="tool-item">
+                {{ tool.name }} ({{ (tool.timeMultiplier * 100).toFixed(0) }}%)
+              </span>
+            </div>
+          </div>
+          <!-- 显示总体效率加成 -->
+          <div class="skill-total-bonus">
+            <strong>总效率加成: {{ skill.combinedBonusPercent.toFixed(1) }}%</strong>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- ── 系统升级 ── -->
-    <section class="panel-section">
-      <div class="section-header">
-        <span class="section-icon">⚡</span>
-        <h3 class="section-title">系统升级</h3>
-      </div>
-      <p v-if="flowStore.upgradeMessage" class="msg-tip">{{ flowStore.upgradeMessage }}</p>
-      <div class="upgrade-list">
-        <div v-for="upg in flowStore.upgradeItems" :key="upg.id" class="upgrade-card">
-          <div class="upgrade-top">
-            <div class="upgrade-name">{{ upg.name }}</div>
-            <div class="upgrade-level">Lv {{ upg.currentLevel }}/{{ upg.maxLevel }}</div>
-          </div>
-          <div class="upgrade-cost">{{ formatCost(upg.costs) }}</div>
-          <button
-            class="btn-upgrade"
-            :class="{ 'btn-upgrade-ready': upg.canPurchase }"
-            :disabled="!upg.canPurchase"
-            @click="flowStore.buyUpgrade(upg.id)"
-          >
-            {{ upg.canPurchase ? '购买升级' : (upg.currentLevel >= upg.maxLevel ? '已满级' : '资源不足') }}
-          </button>
-        </div>
-      </div>
-    </section>
+    <!-- ── 建筑系统 ── -->
+    <BuildingPanel />
 
     <!-- ── 订单任务 ── -->
     <section class="panel-section">
@@ -444,73 +422,45 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
   color: var(--text-dim);
   text-align: right;
 }
-
-/* ── 升级 ── */
-.upgrade-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  margin-bottom: 6px;
 }
 
-.upgrade-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  padding: 10px 12px;
+.tool-info {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-50);
 }
 
-.upgrade-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 3px;
-}
-
-.upgrade-name {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.upgrade-level {
+.tool-label {
   font-size: 10px;
   color: var(--text-dim);
+  margin-bottom: 4px;
+  font-weight: 500;
 }
 
-.upgrade-cost {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-bottom: 8px;
+.tool-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-.btn-upgrade {
-  width: 100%;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  background: var(--bg-card-50);
-  color: var(--text-dim);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-}
-
-.btn-upgrade-ready {
-  background: var(--indigo-bg);
+.tool-item {
+  font-size: 10px;
+  background: rgba(99, 102, 241, 0.15);
   color: #a5b4fc;
-  border-color: rgba(99, 102, 241, 0.4);
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
 }
 
-.btn-upgrade-ready:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.25);
-  color: white;
-}
-
-.msg-tip {
+.skill-total-bonus {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-50);
   font-size: 11px;
-  color: var(--amber);
-  margin-bottom: 8px;
-}
-
+  color: var(--emerald);
+  text-align: right;
+/* ── 升级 ── */
 /* ── 订单 ── */
 .orders-toggle {
   display: flex;

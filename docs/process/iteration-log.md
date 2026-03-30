@@ -46,6 +46,33 @@
 
 ## 迭代记录
 
+### ITER-024 建筑 UI 面板（列表、购买交互、解锁提示）
+- 日期：2026-03-30
+- 所属版本：v0.2
+- 所属阶段：Phase 2
+- 类型：能力增强
+- 目标：实现建筑 UI 面板，支持建筑列表展示、费用验证、购买交互、已解锁内容说明；同步清理 StatusPanel 中残留的升级系统代码，集成技能工具显示。
+- 改动范围：
+  - 新建 `src/components/BuildingPanel.vue`（建筑 UI 面板组件）
+  - 修改 `src/components/StatusPanel.vue`（导入 BuildingPanel、删除升级系统 UI 与 upgradeMultiplier 逻辑、集成技能工具显示）
+  - 修改 `src/components/SkillPanel.vue`（使用新 skillItems 字段：skillBonusPercent / applicableTools / combinedBonusPercent）
+- 未改动范围：store 层、engine 层、数据层
+- 完成内容：
+  - `BuildingPanel.vue` 实现：读取 `flowStore.gameConfig.buildings`，逐条展示名称、费用、购买状态（已购/可购/资源不足），解锁配方与资源标签，购买按钮调用 `flowStore.purchaseBuilding()`
+  - `StatusPanel.vue`：移除 upgradeMultiplier 残留循环、移除整块升级系统 `<section>`、插入 `<BuildingPanel />`；更新技能卡片显示工具信息与综合效率加成
+  - CSS：移除升级系统相关样式，新增 `.tool-info / .tool-label / .tool-list / .tool-item / .skill-total-bonus`
+  - vue-tsc --noEmit 无报错
+- 未完成内容：无
+- 测试情况：类型检查通过
+- 风险与注意事项：
+  - BuildingPanel 依赖 buildingStore 与 flowStore，purchaseBuilding 后会触发 persistState，状态持久化正常
+  - 技能卡片工具显示依赖 toolStore.getHighestTierToolForRecipe，首次加载需确保 toolStore 已初始化
+- 回滚方式：删除 BuildingPanel.vue，还原 StatusPanel.vue / SkillPanel.vue 改动即可
+- 结论：ITER-024 完成，建筑 UI 面板就位，升级系统 UI 清理干净
+- 下一步建议：手动测试建筑购买功能，进入 ITER-025（工具 UI 面板）
+
+---
+
 ### ITER-023 建筑 Store + 引擎接入（购买建筑、同步解锁）
 - 日期：2026-03-30
 - 所属版本：v0.2
