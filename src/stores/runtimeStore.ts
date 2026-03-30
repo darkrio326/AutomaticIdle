@@ -20,6 +20,7 @@ import { RuntimeEngine } from "@/core/runtimeEngine";
 import { createInitialRuntimeState } from "@/core/runtimeTypes";
 import type { RuntimeState, RuntimeStatus } from "@/core/runtimeTypes";
 import type { FlowDefinition } from "@/core/types";
+import { clonePlayerState } from "@/stores/flowStore";
 import { useFlowStore } from "./flowStore";
 
 /** 每隔多少帧将 playerState 回写到 flowStore（降低持久化频率）*/
@@ -84,8 +85,7 @@ export const useRuntimeStore = defineStore("runtime", {
       const flowStore = useFlowStore();
 
       const initialState = createInitialRuntimeState(
-        // 深拷贝 playerState，避免 Pinia 代理对象直接传入引擎
-        JSON.parse(JSON.stringify(flowStore.playerState))
+        clonePlayerState(flowStore.playerState)
       );
       initialState.activeFlow = JSON.parse(
         JSON.stringify(flowStore.flowDefinition)
@@ -206,8 +206,7 @@ export const useRuntimeStore = defineStore("runtime", {
     /** 将 engine 内的 playerState 回写到 flowStore */
     _syncPlayerStateBack(state: RuntimeState): void {
       const flowStore = useFlowStore();
-      // 深拷贝回写，避免引擎后续修改影响 flowStore
-      flowStore.playerState = JSON.parse(JSON.stringify(state.playerState));
+      flowStore.playerState = clonePlayerState(state.playerState);
       flowStore.persistState();
     },
 
@@ -216,10 +215,8 @@ export const useRuntimeStore = defineStore("runtime", {
       const flowStore = useFlowStore();
       const engine = getEngine();
       const engineState = engine.state as RuntimeState;
-      // 同步 playerState（确保使用 flowStore 的最新状态）
-      (engineState as RuntimeState).playerState = JSON.parse(
-        JSON.stringify(flowStore.playerState)
-      );
+      // 同步 playerState（确保使用 flowStore 的最新状态，正确处理 Set 类型）
+      (engineState as RuntimeState).playerState = clonePlayerState(flowStore.playerState);
       // 同步 config
       engine.updateConfig(flowStore.gameConfig);
     },

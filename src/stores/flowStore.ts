@@ -80,7 +80,7 @@ function toRecord<T extends { id: string }>(items: T[]): Record<string, T> {
   return result;
 }
 
-function clonePlayerState(playerState: PlayerState): PlayerState {
+export function clonePlayerState(playerState: PlayerState): PlayerState {
   return {
     inventory: { ...playerState.inventory },
     skills: Object.fromEntries(

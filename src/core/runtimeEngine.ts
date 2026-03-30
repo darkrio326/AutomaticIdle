@@ -50,9 +50,11 @@ function calcActualStepTime(
   // 工具倍率：同一配方只取最高 tier 已购工具
   let toolMultiplier = 1;
   const purchasedTools = state.playerState.purchasedTools;
+  const purchasedToolsIterable: Iterable<string> =
+    purchasedTools instanceof Set ? purchasedTools : new Set<string>();
   if (purchasedTools && config.tools) {
     let bestTier = -1;
-    for (const toolId of purchasedTools) {
+    for (const toolId of purchasedToolsIterable) {
       const toolConfig = config.tools[toolId];
       if (!toolConfig) continue;
       const effect = toolConfig.effects[recipe.id];

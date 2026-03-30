@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import type { RecipeConfig } from '@/core/types';
 import { useFlowStore } from '@/stores/flowStore';
 import { useRuntimeStore } from '@/stores/runtimeStore';
@@ -8,6 +8,12 @@ import { useFlowTemplateStore } from '@/stores/flowTemplateStore';
 const flowStore = useFlowStore();
 const runtimeStore = useRuntimeStore();
 const templateStore = useFlowTemplateStore();
+
+// ── 离线消息弹窗 ──
+const showOfflineModal = ref(false);
+onMounted(() => {
+  if (flowStore.offlineMessage) showOfflineModal.value = true;
+});
 
 // ── 流程模板 ──
 const showSaveInput = ref(false);
@@ -70,11 +76,6 @@ function addStepWithRecipe(recipeId: string): void {
   runtimeStore.notifyFlowChanged();
 }
 
-function onRecipeChange(uid: number, value: string): void {
-  flowStore.updateStepRecipe(uid, value);
-  runtimeStore.notifyFlowChanged();
-}
-
 function onRemoveStep(uid: number): void {
   flowStore.removeStep(uid);
   runtimeStore.notifyFlowChanged();
@@ -134,9 +135,13 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
       <span class="badge-auto">自动循环</span>
     </div>
 
-    <!-- 离线消息 -->
-    <div v-if="flowStore.offlineMessage" class="offline-msg">
-      {{ flowStore.offlineMessage }}
+    <!-- 离线消息弹窗 -->
+    <div v-if="showOfflineModal" class="offline-modal-backdrop" @click.self="showOfflineModal = false">
+      <div class="offline-modal">
+        <div class="offline-modal-title">📦 离线收益结算</div>
+        <div class="offline-modal-body">{{ flowStore.offlineMessage }}</div>
+        <button class="offline-modal-ok" @click="showOfflineModal = false">确认</button>
+      </div>
     </div>
 
     <!-- ── 流程模板 ── -->
@@ -207,14 +212,6 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
             <span class="step-time">{{ getRecipeTime(step.recipeId) }}s</span>
           </div>
           <div class="step-actions">
-            <select
-              :value="step.recipeId"
-              @change="onRecipeChange(step.uid, ($event.target as HTMLSelectElement).value)"
-            >
-              <option v-for="recipe in flowStore.recipeOptions" :key="recipe.id" :value="recipe.id">
-                {{ recipe.name }}
-              </option>
-            </select>
             <button class="btn-icon btn-danger" @click="onRemoveStep(step.uid)" title="删除">✕</button>
           </div>
         </div>
@@ -356,16 +353,55 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
   padding: 2px 8px;
 }
 
-/* 离线消息 */
+/* 离线消息（已弃用，改为 modal） */
 .offline-msg {
-  font-size: 12px;
+  display: none;
+}
+
+/* 离线消息 Modal */
+.offline-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.offline-modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 20px 24px;
+  max-width: 320px;
+  width: calc(100% - 32px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+.offline-modal-title {
+  font-size: 13px;
+  font-weight: 700;
   color: var(--amber);
+  margin-bottom: 10px;
+}
+.offline-modal-body {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.offline-modal-ok {
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 700;
   background: var(--amber-bg);
+  color: var(--amber);
   border: 1px solid rgba(251, 191, 36, 0.3);
   border-radius: var(--r-sm);
-  padding: 6px 10px;
-  margin-bottom: 12px;
-  flex-shrink: 0;
+  cursor: pointer;
+}
+.offline-modal-ok:hover {
+  background: rgba(251, 191, 36, 0.2);
 }
 
 /* 步骤列表 */

@@ -525,6 +525,8 @@ function formatUnlocks(items: Array<{ type: string; id: string }>): string {
   font-size: 11px;
   color: var(--emerald);
   text-align: right;
+}
+
 /* ── 升级 ── */
 /* ── 订单 ── */
 .orders-toggle {
