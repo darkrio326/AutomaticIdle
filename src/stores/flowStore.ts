@@ -454,7 +454,7 @@ export const useFlowStore = defineStore('flow', {
         unlockedRecipeIds,
         purchasedBuildingIds: buildingStore.getPurchasedBuildingIds,
         purchasedToolIds: toolStore.getPurchasedToolIds,
-        orderSlots: orderStore.getSnapshotSlots(),
+        orderSlots: orderStore.getSnapshotSlots,
         lastSavedAt: Date.now(),
       });
     },
