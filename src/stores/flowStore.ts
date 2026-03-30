@@ -452,8 +452,8 @@ export const useFlowStore = defineStore('flow', {
         steps: this.steps.map((s) => ({ recipeId: s.recipeId, repeat: s.repeat })),
         playerState: this.playerState,
         unlockedRecipeIds,
-        purchasedBuildingIds: buildingStore.getPurchasedBuildingIds(),
-        purchasedToolIds: toolStore.getPurchasedToolIds(),
+        purchasedBuildingIds: buildingStore.getPurchasedBuildingIds,
+        purchasedToolIds: toolStore.getPurchasedToolIds,
         orderSlots: orderStore.getSnapshotSlots(),
         lastSavedAt: Date.now(),
       });
