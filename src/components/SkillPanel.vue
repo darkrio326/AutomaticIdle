@@ -24,13 +24,13 @@ const skillItems = computed(() => flowStore.skillItems);
           <p>适配工具：</p>
           <ul>
             <li v-for="tool in skill.applicableTools" :key="tool.toolId">
-              {{ tool.name }} (Tier {{ tool.tier }}) - {{ (tool.timeMultiplier * 100).toFixed(0) }}%
+              {{ tool.name }} (Tier {{ tool.tier }}) -{{ ((1 - tool.timeMultiplier) * 100).toFixed(0) }}% 耗时
             </li>
           </ul>
         </div>
         
         <!-- 总体加速效果 -->
-        <p><strong>总效率加成：{{ skill.combinedBonusPercent.toFixed(1) }}%</strong></p>
+        <p><strong>当前总加成：{{ skill.combinedBonusPercent.toFixed(1) }}%</strong></p>
       </li>
     </ul>
   </section>

@@ -14,6 +14,7 @@ const orderStore = useOrderStore();
 const buildingStore = useBuildingStore();
 
 const ordersExpanded = ref(true);
+const expandedSkillIds = ref<string[]>([]);
 
 /** 订单时钟刷新 */
 const now = ref(Date.now());
@@ -57,7 +58,7 @@ function formatTime(ms: number): string {
 }
 
 /** 资源显示基础顺序 */
-const BASE_RESOURCE_ORDER = ['gold', 'iron_ore', 'iron_ingot', 'iron_sword'];
+const BASE_RESOURCE_ORDER = ['gold', 'iron_ore', 'iron_ingot'];
 
 const currentInventory = computed(() => {
   return (runtimeStore.isRunning || runtimeStore.isPaused)
@@ -183,6 +184,18 @@ function formatResources(items: Array<{ resourceId: string; amount: number }>): 
     return `${name} ×${x.amount}`;
   }).join(' / ');
 }
+
+function toggleSkill(skillId: string): void {
+  if (expandedSkillIds.value.includes(skillId)) {
+    expandedSkillIds.value = expandedSkillIds.value.filter((id) => id !== skillId);
+    return;
+  }
+  expandedSkillIds.value = [...expandedSkillIds.value, skillId];
+}
+
+function isSkillExpanded(skillId: string): boolean {
+  return expandedSkillIds.value.includes(skillId);
+}
 </script>
 
 <template>
@@ -223,12 +236,20 @@ function formatResources(items: Array<{ resourceId: string; amount: number }>): 
         <h3 class="section-title">技能成长</h3>
       </div>
       <div class="skills-list">
-        <div v-for="skill in flowStore.skillItems" :key="skill.id" class="skill-card">
+        <button
+          v-for="skill in flowStore.skillItems"
+          :key="skill.id"
+          type="button"
+          class="skill-card"
+          :class="{ 'skill-card-expanded': isSkillExpanded(skill.id) }"
+          @click="toggleSkill(skill.id)"
+        >
           <div class="skill-header">
             <div class="skill-name">{{ skill.name }}</div>
             <div class="skill-meta">
               <span class="skill-level">Lv.{{ skill.level }}</span>
               <span class="skill-bonus">-{{ skill.skillBonusPercent.toFixed(0) }}% 耗时</span>
+              <span class="skill-toggle-arrow" :class="{ expanded: isSkillExpanded(skill.id) }">›</span>
             </div>
           </div>
           <div class="exp-track">
@@ -245,15 +266,25 @@ function formatResources(items: Array<{ resourceId: string; amount: number }>): 
             <div class="tool-label">工具加速:</div>
             <div class="tool-list">
               <span v-for="tool in skill.applicableTools" :key="tool.toolId" class="tool-item">
-                {{ tool.name }} ({{ (tool.timeMultiplier * 100).toFixed(0) }}%)
+                {{ tool.name }} (-{{ ((1 - tool.timeMultiplier) * 100).toFixed(0) }}% 耗时)
               </span>
             </div>
           </div>
           <!-- 显示总体效率加成 -->
           <div class="skill-total-bonus">
-            <strong>总效率加成: {{ skill.combinedBonusPercent.toFixed(1) }}%</strong>
+            <strong>当前总加成: {{ skill.combinedBonusPercent.toFixed(1) }}%</strong>
           </div>
-        </div>
+          <div v-if="isSkillExpanded(skill.id)" class="skill-expanded">
+            <div class="skill-expanded-title">配方总加成</div>
+            <div v-if="skill.recipeBonuses.length > 0" class="skill-recipe-list">
+              <div v-for="recipe in skill.recipeBonuses" :key="recipe.recipeId" class="skill-recipe-row">
+                <span class="skill-recipe-name">{{ recipe.recipeName }}</span>
+                <span class="skill-recipe-bonus">总加成：{{ recipe.combinedBonusPercent.toFixed(1) }}%</span>
+              </div>
+            </div>
+            <div v-else class="skill-empty-detail">当前没有关联配方</div>
+          </div>
+        </button>
       </div>
     </section>
 
@@ -467,6 +498,20 @@ function formatResources(items: Array<{ resourceId: string; amount: number }>): 
   border: 1px solid var(--border-50);
   border-radius: var(--r-md);
   padding: 10px 12px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.skill-card:hover {
+  border-color: rgba(99, 102, 241, 0.3);
+  background: var(--bg-card);
+}
+
+.skill-card-expanded {
+  border-color: rgba(99, 102, 241, 0.35);
+  background: var(--bg-card);
 }
 
 .skill-header {
@@ -486,6 +531,17 @@ function formatResources(items: Array<{ resourceId: string; amount: number }>): 
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.skill-toggle-arrow {
+  font-size: 16px;
+  color: var(--text-dim);
+  transform: rotate(0deg);
+  transition: transform 0.2s ease;
+}
+
+.skill-toggle-arrow.expanded {
+  transform: rotate(90deg);
 }
 
 .skill-level {
@@ -565,6 +621,54 @@ function formatResources(items: Array<{ resourceId: string; amount: number }>): 
   font-size: 11px;
   color: var(--emerald);
   text-align: right;
+}
+
+.skill-expanded {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-50);
+}
+
+.skill-expanded-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.skill-recipe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skill-recipe-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: var(--r-sm);
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.skill-recipe-name {
+  font-size: 11px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.skill-recipe-bonus {
+  font-size: 11px;
+  color: var(--emerald);
+  white-space: nowrap;
+}
+
+.skill-empty-detail {
+  font-size: 11px;
+  color: var(--text-dim);
 }
 
 /* ── 升级 ── */

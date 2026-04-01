@@ -121,6 +121,18 @@ const sellRecipes = computed(() =>
   flowStore.recipeOptions.filter((recipe) => recipe.category === 'sell')
 );
 
+const hasNonSellStep = computed(() =>
+  flowStore.steps.some((step) => getRecipeCategory(step.recipeId) !== 'sell')
+);
+
+const canAddSellStep = computed(() => hasNonSellStep.value);
+
+const sellStepHint = computed(() =>
+  canAddSellStep.value
+    ? ''
+    : '售卖只能作为收尾步骤，流程里至少需要一个采集或加工步骤。'
+);
+
 function getRecipeName(recipeId: string): string {
   return flowStore.gameConfig.recipes[recipeId]?.name ?? recipeId;
 }
@@ -134,11 +146,8 @@ function getRecipeCategory(recipeId: string): string {
 }
 
 function addStepWithRecipe(recipeId: string): void {
-  flowStore.addStep();
-  const newStep = flowStore.steps[flowStore.steps.length - 1];
-  if (newStep.recipeId !== recipeId) {
-    flowStore.updateStepRecipe(newStep.uid, recipeId);
-  }
+  const added = flowStore.addStep(recipeId);
+  if (!added) return;
   runtimeStore.notifyFlowChanged();
 }
 
@@ -323,6 +332,9 @@ onUnmounted(() => {
         <div v-if="flowStore.steps.length === 0" class="empty-steps">
           流程为空，系统停机
         </div>
+        <div v-else-if="flowStore.flowValidationError" class="empty-steps">
+          {{ flowStore.flowValidationError }}
+        </div>
       </div>
 
       <div class="split-handle" @pointerdown="onSplitPointerDown" title="拖拽调整上下区块高度">
@@ -377,11 +389,13 @@ onUnmounted(() => {
 
             <div class="recipe-group" v-if="sellRecipes.length > 0">
               <div class="recipe-group-head">出售</div>
+              <div v-if="sellStepHint" class="recipe-group-hint">{{ sellStepHint }}</div>
               <div class="recipe-buttons">
                 <button
                   v-for="recipe in sellRecipes"
                   :key="recipe.id"
                   class="btn-add-recipe"
+                  :disabled="!canAddSellStep"
                   @click="addStepWithRecipe(recipe.id)"
                 >
                   + {{ recipe.name }}
@@ -402,6 +416,7 @@ onUnmounted(() => {
           <div v-if="runtimeStore.isRunning" class="run-state-ok">✓ 自动运行中</div>
           <div v-else-if="runtimeStore.isPaused" class="run-state-pause">⏸ 已暂停（页面整体）</div>
           <div v-else-if="flowStore.steps.length === 0" class="run-state-warn">流程为空，系统停机</div>
+          <div v-else-if="flowStore.flowValidationError" class="run-state-warn">{{ flowStore.flowValidationError }}</div>
           <div v-else class="run-state-warn">资源不足，系统停机</div>
           <div v-if="runtimeStore.isRunning || runtimeStore.isPaused || runtimeStore.loopCount > 0" class="loop-count">
             已循环 {{ runtimeStore.loopCount }} 次
@@ -789,6 +804,13 @@ onUnmounted(() => {
   letter-spacing: 0.02em;
 }
 
+.recipe-group-hint {
+  margin-bottom: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--amber);
+}
+
 .tip-title {
   font-size: 12px;
   font-weight: 700;
@@ -840,6 +862,11 @@ onUnmounted(() => {
   background: var(--indigo-bg);
   border-color: var(--indigo);
   color: var(--text);
+}
+
+.btn-add-recipe:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .recipe-tooltip {

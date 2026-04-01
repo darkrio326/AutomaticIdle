@@ -45,18 +45,26 @@ const toolItems = computed((): ToolItem[] => {
       ? { canBuy: false, reason: '已购' }
       : toolStore.canPurchaseTool(toolId, flowStore.playerState, flowStore.gameConfig);
 
-    const effects: ToolEffect[] = Object.entries(toolConfig.effects).map(([recipeId, effect]) => ({
-      recipeId,
-      recipeName: flowStore.gameConfig.recipes[recipeId]?.name ?? recipeId,
-      timeMultiplier: effect.timeMultiplier,
-      speedPercent: Math.round((1 - effect.timeMultiplier) * 100),
-    }));
-
     const upgradeLevel = toolStore.toolLevels[toolId] ?? 0;
     const upgradeConfig = toolConfig.upgrade;
     const upgradeMaxLevel = upgradeConfig?.maxLevel ?? 0;
     const upgradeCost = upgradeConfig?.costPerLevel ?? {};
     const hasUpgrade = !!upgradeConfig;
+    const efficiencyPerLevel = upgradeConfig?.efficiencyPerLevel ?? 0;
+    const effects: ToolEffect[] = Object.entries(toolConfig.effects).map(([recipeId, effect]) => {
+      const actualTimeMultiplier = Math.max(
+        0.1,
+        effect.timeMultiplier - upgradeLevel * efficiencyPerLevel,
+      );
+
+      return {
+        recipeId,
+        recipeName: flowStore.gameConfig.recipes[recipeId]?.name ?? recipeId,
+        timeMultiplier: actualTimeMultiplier,
+        speedPercent: Math.round((1 - actualTimeMultiplier) * 100),
+      };
+    });
+
     const upgradeCheck = isPurchased && hasUpgrade
       ? toolStore.canUpgradeTool(toolId, flowStore.playerState, flowStore.gameConfig)
       : { canUpgrade: false, reason: '' };

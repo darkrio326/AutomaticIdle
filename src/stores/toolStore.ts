@@ -35,11 +35,18 @@ export const useToolStore = defineStore('tool', {
           if (!effect) continue;
 
           const tier = toolConfig.tier ?? 0;
+          const upgradeLevel = this.toolLevels[toolId] ?? 0;
+          const efficiencyPerLevel = toolConfig.upgrade?.efficiencyPerLevel ?? 0;
+          const actualTimeMultiplier = Math.max(
+            0.1,
+            effect.timeMultiplier - upgradeLevel * efficiencyPerLevel,
+          );
+
           if (!bestTool || tier > bestTool.tier) {
             bestTool = {
               toolId,
               tier,
-              timeMultiplier: effect.timeMultiplier,
+              timeMultiplier: actualTimeMultiplier,
             };
           }
         }
@@ -65,11 +72,18 @@ export const useToolStore = defineStore('tool', {
           const effect = toolConfig.effects[recipeId];
           if (!effect) continue;
 
+          const upgradeLevel = this.toolLevels[toolId] ?? 0;
+          const efficiencyPerLevel = toolConfig.upgrade?.efficiencyPerLevel ?? 0;
+          const actualTimeMultiplier = Math.max(
+            0.1,
+            effect.timeMultiplier - upgradeLevel * efficiencyPerLevel,
+          );
+
           tools.push({
             toolId,
             name: toolConfig.name,
             tier: toolConfig.tier ?? 0,
-            timeMultiplier: effect.timeMultiplier,
+            timeMultiplier: actualTimeMultiplier,
           });
         }
 

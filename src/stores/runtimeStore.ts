@@ -20,7 +20,7 @@ import { RuntimeEngine } from "@/core/runtimeEngine";
 import { createInitialRuntimeState } from "@/core/runtimeTypes";
 import type { RuntimeState, RuntimeStatus } from "@/core/runtimeTypes";
 import type { FlowDefinition } from "@/core/types";
-import { clonePlayerState } from "@/stores/flowStore";
+import { clonePlayerState, getFlowValidationError } from "@/stores/flowStore";
 import { useFlowStore } from "./flowStore";
 import { useToolStore } from "./toolStore";
 
@@ -106,6 +106,16 @@ export const useRuntimeStore = defineStore("runtime", {
         this.stop();
         return;
       }
+      const validationError = getFlowValidationError(
+        flowStore.flowDefinition.steps,
+        flowStore.gameConfig,
+      );
+      if (validationError) {
+        flowStore.errorMessage = validationError;
+        this.stop();
+        return;
+      }
+      flowStore.errorMessage = "";
       // 每次启动前先同步最新流程和配置
       this._syncFlowToEngine();
       getEngine().start();
@@ -145,6 +155,7 @@ export const useRuntimeStore = defineStore("runtime", {
       const newFlow: FlowDefinition = JSON.parse(
         JSON.stringify(flowStore.flowDefinition)
       );
+      const validationError = getFlowValidationError(newFlow.steps, flowStore.gameConfig);
 
       if (newFlow.steps.length === 0) {
         this.stop();
@@ -155,6 +166,19 @@ export const useRuntimeStore = defineStore("runtime", {
         this.hasPendingFlow = false;
         return;
       }
+
+      if (validationError) {
+        flowStore.errorMessage = validationError;
+        this.stop();
+        const engineState = getEngine().state as RuntimeState;
+        (engineState as RuntimeState).activeFlow = newFlow;
+        (engineState as RuntimeState).pendingFlow = null;
+        this.activeFlow = newFlow;
+        this.hasPendingFlow = false;
+        return;
+      }
+
+      flowStore.errorMessage = "";
 
       if (this.status === "running" || this.status === "paused") {
         getEngine().setPendingFlow(newFlow);

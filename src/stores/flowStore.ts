@@ -39,6 +39,8 @@ interface OfflineSettlementView {
   expDelta: Record<string, number>;
 }
 
+type FlowStepDraft = { recipeId: string; repeat: number };
+
 const OFFLINE_MAX_SECONDS = 4 * 60 * 60;
 
 function canSubmitOrderRequirements(
@@ -107,6 +109,24 @@ function multiplyRecord(input: Record<string, number>, multiplier: number): Reco
   return result;
 }
 
+export function getFlowValidationError(
+  steps: FlowStepDraft[],
+  gameConfig: GameConfig,
+): string {
+  if (steps.length === 0) return '';
+
+  const hasNonSellStep = steps.some((step) => {
+    const recipe = gameConfig.recipes[step.recipeId];
+    return recipe != null && recipe.category !== 'sell';
+  });
+
+  if (!hasNonSellStep) {
+    return '流程不能只包含售卖步骤，至少需要一个采集或加工步骤。';
+  }
+
+  return '';
+}
+
 function settleOfflineProgress(
   flowName: string,
   steps: FlowStepItem[],
@@ -169,9 +189,7 @@ function calcDisplayRecipeTimeSeconds(
   let toolMultiplier = 1;
   const bestTool = toolStore.getHighestTierToolForRecipe(recipe.id, gameConfig);
   if (bestTool) {
-    const upgradeLevel = toolStore.toolLevels[bestTool.toolId] ?? 0;
-    const effPerLevel = gameConfig.tools?.[bestTool.toolId]?.upgrade?.efficiencyPerLevel ?? 0;
-    toolMultiplier = Math.max(0.1, bestTool.timeMultiplier - upgradeLevel * effPerLevel);
+    toolMultiplier = bestTool.timeMultiplier;
   }
 
   return Math.max(0, recipe.timeSeconds * skillMultiplier * toolMultiplier);
@@ -257,14 +275,17 @@ function buildInitialState() {
       repeat: Math.max(1, Math.floor(s.repeat)),
     }));
 
-  const safeSteps = restoredSteps;
+  const invalidFlowMessage = getFlowValidationError(restoredSteps, gameConfig);
+  const safeSteps = invalidFlowMessage ? [] : restoredSteps;
   const restoredPlayerState = clonePlayerState(snapshot.playerState);
   const elapsedSeconds = Math.max(
     0,
     Math.floor((now - (typeof snapshot.lastSavedAt === 'number' ? snapshot.lastSavedAt : now)) / 1000),
   );
 
-  let offlineMessage = '';
+  let offlineMessage = invalidFlowMessage
+    ? '检测到旧存档仅包含售卖步骤，已自动清空该流程；请至少保留一个采集或加工步骤。'
+    : '';
   const settlement = settleOfflineProgress(
     snapshot.flowName || '默认流程',
     safeSteps,
@@ -287,7 +308,10 @@ function buildInitialState() {
 
     const elapsedMinutes = Math.floor(settlement.elapsedSeconds / 60);
     const appliedMinutes = Math.floor(settlement.appliedSeconds / 60);
-    offlineMessage = `离线 ${elapsedMinutes} 分钟（按上限结算 ${appliedMinutes} 分钟），已补发 ${settlement.cycles} 轮流程收益。`;
+    const settlementMessage = `离线 ${elapsedMinutes} 分钟（按上限结算 ${appliedMinutes} 分钟），已补发 ${settlement.cycles} 轮流程收益。`;
+    offlineMessage = offlineMessage
+      ? `${offlineMessage} ${settlementMessage}`
+      : settlementMessage;
   }
 
   const unlockedRecipeIds = Object.values(gameConfig.recipes)
@@ -324,12 +348,12 @@ export const useFlowStore = defineStore('flow', {
     recipeOptions(state): RecipeConfig[] {
       const buildingStore = useBuildingStore();
       const enabledRecipes = Object.values(state.gameConfig.recipes).filter((r) => {
-        // 检查配方本身是否启用
-        if (r.enabled === false) return false;
-        
-        // 检查是否被建筑解锁
+        // 默认启用的配方直接可见，显式关闭的配方需要建筑解锁。
         const unlockedRecipeIds = buildingStore.getUnlockedRecipeIds(state.gameConfig);
-        return r.enabled !== false || unlockedRecipeIds.includes(r.id);
+        if (r.enabled === false) {
+          return unlockedRecipeIds.includes(r.id);
+        }
+        return true;
       });
       return enabledRecipes;
     },
@@ -346,6 +370,9 @@ export const useFlowStore = defineStore('flow', {
         name: state.flowName,
         steps,
       };
+    },
+    flowValidationError(state): string {
+      return getFlowValidationError(state.steps, state.gameConfig);
     },
     displayGps(state): number {
       let totalGold = 0;
@@ -381,10 +408,14 @@ export const useFlowStore = defineStore('flow', {
       requiredExp: number;
       progressPercent: number;
       skillBonusPercent: number;
+      toolBonusPercent: number;
       applicableTools: Array<{ toolId: string; name: string; tier: number; timeMultiplier: number }>;
       combinedBonusPercent: number;
+      recipeBonuses: Array<{ recipeId: string; recipeName: string; combinedBonusPercent: number }>;
     }> {
       const toolStore = useToolStore();
+      const buildingStore = useBuildingStore();
+      const unlockedRecipeIds = new Set(buildingStore.getUnlockedRecipeIds(state.gameConfig));
       
       return Object.values(state.gameConfig.skills).map((skillConfig) => {
         const skillState = state.playerState.skills[skillConfig.id] ?? {
@@ -407,7 +438,16 @@ export const useFlowStore = defineStore('flow', {
 
         // 获取该技能对应的配方，并收集所有适用的工具
         const recipesForSkill = Object.values(state.gameConfig.recipes)
-          .filter((r) => r.requiredSkillId === skillConfig.id);
+          .filter((recipe) => {
+            const matchedSkill =
+              recipe.requiredSkillId === skillConfig.id
+              || recipe.expGains.some((gain) => gain.skillId === skillConfig.id);
+            if (!matchedSkill) return false;
+            if (recipe.enabled === false) {
+              return unlockedRecipeIds.has(recipe.id);
+            }
+            return true;
+          });
         
         // 收集所有应用到这些配方的工具
         const applicableToolsSet = new Map<string, { toolId: string; name: string; tier: number; timeMultiplier: number }>();
@@ -431,12 +471,26 @@ export const useFlowStore = defineStore('flow', {
           .sort((a, b) => b.tier - a.tier);
 
         // 计算技能和工具叠加后的总加速（1 - skillMultiplier * toolMultiplier 相对于基础时间的减速）
-        let skillMultiplier = 1 - skillBonusPercent / 100;
+        const skillMultiplier = 1 - skillBonusPercent / 100;
+
+        const recipeBonuses = recipesForSkill.map((recipe) => {
+          const bestTool = toolStore.getHighestTierToolForRecipe(recipe.id, state.gameConfig);
+          const recipeToolMultiplier = bestTool?.timeMultiplier ?? 1;
+          const recipeCombinedMultiplier = skillMultiplier * recipeToolMultiplier;
+
+          return {
+            recipeId: recipe.id,
+            recipeName: recipe.name,
+            combinedBonusPercent: Math.max(0, (1 - recipeCombinedMultiplier) * 100),
+          };
+        }).sort((a, b) => b.combinedBonusPercent - a.combinedBonusPercent);
+
         let toolMultiplier = 1;
         if (applicableTools.length > 0) {
           // 使用最高 tier 工具的效果
           toolMultiplier = applicableTools[0].timeMultiplier;
         }
+        const toolBonusPercent = Math.max(0, (1 - toolMultiplier) * 100);
         const combinedMultiplier = skillMultiplier * toolMultiplier;
         const combinedBonusPercent = Math.max(0, (1 - combinedMultiplier) * 100);
 
@@ -448,8 +502,10 @@ export const useFlowStore = defineStore('flow', {
           requiredExp,
           progressPercent,
           skillBonusPercent,
+          toolBonusPercent,
           applicableTools,
           combinedBonusPercent,
+          recipeBonuses,
         };
       });
     },
@@ -476,30 +532,58 @@ export const useFlowStore = defineStore('flow', {
         lastSavedAt: Date.now(),
       });
     },
-    addStep(): void {
+    addStep(recipeId?: string): boolean {
       const fallbackRecipeId = this.recipeOptions[0]?.id ?? '';
-      this.steps.push({
+      const nextStep = {
         uid: stepUidSeed++,
-        recipeId: fallbackRecipeId,
+        recipeId: recipeId ?? fallbackRecipeId,
         repeat: 1,
-      });
+      };
+      const nextSteps = [...this.steps, nextStep];
+      const validationError = getFlowValidationError(nextSteps, this.gameConfig);
+      if (validationError) {
+        pushUiMessage(this, validationError, 3000);
+        return false;
+      }
+      this.steps = nextSteps;
       this.persistState();
+      return true;
     },
     removeStep(uid: number): void {
-      this.steps = this.steps.filter((s) => s.uid !== uid);
+      const nextSteps = this.steps.filter((s) => s.uid !== uid);
+      const validationError = getFlowValidationError(nextSteps, this.gameConfig);
+      if (validationError) {
+        pushUiMessage(this, validationError, 3000);
+        return;
+      }
+      this.steps = nextSteps;
       this.persistState();
     },
     replaceSteps(steps: Array<{ recipeId: string; repeat: number }>): void {
-      this.steps = steps.map((s) => ({
+      const nextSteps = steps.map((s) => ({
         uid: stepUidSeed++,
         recipeId: s.recipeId,
         repeat: Math.max(1, Math.floor(s.repeat)),
       }));
+      const validationError = getFlowValidationError(nextSteps, this.gameConfig);
+      if (validationError) {
+        pushUiMessage(this, validationError, 3000);
+        return;
+      }
+      this.steps = nextSteps;
       this.persistState();
     },
     updateStepRecipe(uid: number, recipeId: string): void {
       const step = this.steps.find((s) => s.uid === uid);
       if (!step) return;
+      const nextSteps = this.steps.map((item) =>
+        item.uid === uid ? { ...item, recipeId } : item,
+      );
+      const validationError = getFlowValidationError(nextSteps, this.gameConfig);
+      if (validationError) {
+        pushUiMessage(this, validationError, 3000);
+        return;
+      }
       step.recipeId = recipeId;
       this.persistState();
     },
@@ -520,6 +604,12 @@ export const useFlowStore = defineStore('flow', {
 
       if (this.steps.some((s) => !s.recipeId)) {
         this.errorMessage = '存在未选择配方的步骤。';
+        return;
+      }
+
+      const validationError = getFlowValidationError(this.steps, this.gameConfig);
+      if (validationError) {
+        this.errorMessage = validationError;
         return;
       }
 
