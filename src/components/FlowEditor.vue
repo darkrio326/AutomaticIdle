@@ -24,6 +24,7 @@ const selectedTemplateId = ref('');
 const editorMainRef = ref<HTMLElement | null>(null);
 const splitRatio = ref(0.62);
 let draggingSplit = false;
+let activePointerId: number | null = null;
 const SPLIT_MIN_TOP = 180;
 const SPLIT_MIN_BOTTOM = 170;
 const SPLIT_HANDLE_HEIGHT = 10;
@@ -50,25 +51,31 @@ function updateSplitByClientY(clientY: number): void {
   splitRatio.value = clampSplitRatio(top / usable);
 }
 
-function onSplitMouseMove(event: MouseEvent): void {
+function onSplitPointerMove(event: PointerEvent): void {
   if (!draggingSplit) return;
+  if (activePointerId !== null && event.pointerId !== activePointerId) return;
   event.preventDefault();
   updateSplitByClientY(event.clientY);
 }
 
-function onSplitMouseUp(): void {
+function onSplitPointerUp(event?: PointerEvent): void {
   if (!draggingSplit) return;
+  if (event && activePointerId !== null && event.pointerId !== activePointerId) return;
   draggingSplit = false;
-  window.removeEventListener('mousemove', onSplitMouseMove);
-  window.removeEventListener('mouseup', onSplitMouseUp);
+  activePointerId = null;
+  window.removeEventListener('pointermove', onSplitPointerMove);
+  window.removeEventListener('pointerup', onSplitPointerUp);
+  window.removeEventListener('pointercancel', onSplitPointerUp);
 }
 
-function onSplitMouseDown(event: MouseEvent): void {
+function onSplitPointerDown(event: PointerEvent): void {
   event.preventDefault();
+  activePointerId = event.pointerId;
   draggingSplit = true;
   updateSplitByClientY(event.clientY);
-  window.addEventListener('mousemove', onSplitMouseMove);
-  window.addEventListener('mouseup', onSplitMouseUp);
+  window.addEventListener('pointermove', onSplitPointerMove, { passive: false });
+  window.addEventListener('pointerup', onSplitPointerUp);
+  window.addEventListener('pointercancel', onSplitPointerUp);
 }
 
 const stepListStyle = computed(() => ({
@@ -193,7 +200,7 @@ function getRecipeSellValue(recipe: RecipeConfig): string {
 }
 
 onUnmounted(() => {
-  onSplitMouseUp();
+  onSplitPointerUp();
 });
 </script>
 
@@ -318,7 +325,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="split-handle" @mousedown="onSplitMouseDown" title="拖拽调整上下区块高度">
+      <div class="split-handle" @pointerdown="onSplitPointerDown" title="拖拽调整上下区块高度">
         <span class="split-handle-dot"></span>
       </div>
 
@@ -536,6 +543,11 @@ onUnmounted(() => {
   gap: 8px;
   padding-right: 2px;
   margin-bottom: 0;
+}
+
+.split-handle {
+  touch-action: none;
+  user-select: none;
 }
 
 .step-card {

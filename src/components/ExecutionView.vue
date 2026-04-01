@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useRoute } from 'vue-router';
 import { clearSaveSnapshot } from '@/services/saveService';
 import { useFlowStore } from '@/stores/flowStore';
 import { useRuntimeStore } from '@/stores/runtimeStore';
 
 const flowStore = useFlowStore();
 const runtimeStore = useRuntimeStore();
+const route = useRoute();
 
 type ExecViewMode = 'active' | 'empty' | 'standby';
 
@@ -67,6 +69,8 @@ function buildLiveSnapshot(): ExecViewSnapshot {
 const viewState = computed(() => {
   return buildLiveSnapshot();
 });
+
+const showDebugTools = computed(() => route.query.debug === '1');
 
 function onClearSave(): void {
   clearSaveSnapshot();
@@ -208,7 +212,7 @@ function formatResourceAmount(resourceId: string, amount: number): string {
       </div>
 
       <!-- Debug 行 -->
-      <div class="debug-row">
+      <div v-if="showDebugTools" class="debug-row">
         <span class="debug-label">debug</span>
         <button
           class="debug-btn debug-btn-freeze"
@@ -651,7 +655,7 @@ function formatResourceAmount(resourceId: string, amount: number): string {
   }
 
   .exec-header {
-    gap: 12px;
+    display: none;
   }
 
   .gps-number {
