@@ -10,6 +10,7 @@
 ## [Unreleased]
 
 ### 变更
+- [2026-04-01 +0800] 发布页文案收口：`versions/v0.2-RELEASE.md` 从偏内部“发布与门禁”格式改为更适合 GitHub release 展示的公开版本说明，并将同版文案同步用于远端 `v0.2` release 页面。
 - [2026-04-01 +0800] 公开文档继续收口：根目录新增 `versions/`，保留可公开提交的版本发布文档（`*RELEASE.md`）；`README.md` 同步补充公开文档入口说明。
 - [2026-04-01 +0800] 开源许可确定为 MIT License：删除 `LICENSE_TODO.md`，新增根目录 `LICENSE` 正式许可证文件。
 - [2026-04-01 +0800] 仓库公开收口：`CHANGELOG.md` 移至仓库根目录；`docs/` 与 `.vscode/` 改为仅本地保留，不再随 GitHub 仓库提交；根目录 `README.md` 同步收紧为公开仓库说明。
