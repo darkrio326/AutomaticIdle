@@ -787,4 +787,56 @@ function formatResources(items: Array<{ resourceId: string; amount: number }>): 
   color: var(--red);
   border-color: rgba(248, 113, 113, 0.28);
 }
+
+@media (max-width: 900px) {
+  .status-panel {
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .inv-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .order-actions {
+    flex-wrap: wrap;
+  }
+
+  .order-actions .btn-order,
+  .btn-order-refresh,
+  .btn-order-discard {
+    min-height: 36px;
+  }
+}
+
+@media (max-width: 520px) {
+  .panel-section {
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+  }
+
+  .inv-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .skill-header,
+  .order-header,
+  .section-header {
+    align-items: flex-start;
+  }
+
+  .skill-header,
+  .skill-meta,
+  .order-actions {
+    flex-wrap: wrap;
+  }
+
+  .orders-count {
+    margin-left: 0;
+  }
+
+  .order-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+}
 </style>

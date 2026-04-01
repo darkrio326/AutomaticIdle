@@ -309,4 +309,104 @@ const PARTICLES = [
   color: var(--text-dim);
   letter-spacing: 0.5px;
 }
+
+@media (max-width: 900px) {
+  .welcome {
+    min-height: 100dvh;
+    height: auto;
+    align-items: flex-start;
+    padding: max(20px, env(safe-area-inset-top)) 0 max(20px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+
+  .welcome-body {
+    gap: 20px;
+    padding: 8px 16px 24px;
+  }
+
+  .logo-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+  }
+
+  .logo-ring {
+    width: 76px;
+    height: 76px;
+  }
+
+  .game-title {
+    font-size: 30px;
+  }
+
+  .game-subtitle {
+    font-size: 13px;
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .feature-card {
+    padding: 14px;
+  }
+
+  .btn-start {
+    width: 100%;
+    justify-content: center;
+    padding: 14px 20px;
+  }
+
+  .circle-1 {
+    width: 420px;
+    height: 420px;
+    top: -140px;
+    right: -180px;
+  }
+
+  .circle-2 {
+    width: 280px;
+    height: 280px;
+    left: -120px;
+  }
+
+  .circle-3 {
+    width: 180px;
+    height: 180px;
+    bottom: 180px;
+    right: -30px;
+  }
+}
+
+@media (max-width: 520px) {
+  .welcome-body {
+    gap: 16px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .game-title {
+    font-size: 26px;
+  }
+
+  .ticker-wrap {
+    padding: 6px 0;
+  }
+
+  .ticker-text {
+    font-size: 10px;
+  }
+
+  .feature-label {
+    font-size: 12px;
+  }
+
+  .feature-desc {
+    font-size: 11px;
+  }
+
+  .particle {
+    font-size: 15px;
+  }
+}
 </style>

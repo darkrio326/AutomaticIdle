@@ -644,4 +644,68 @@ function formatResourceAmount(resourceId: string, amount: number): string {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+@media (max-width: 900px) {
+  .exec-inner {
+    padding: 16px 14px calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .exec-header {
+    gap: 12px;
+  }
+
+  .gps-number {
+    font-size: 34px;
+  }
+
+  .exec-card {
+    max-width: none;
+    padding: 22px 18px 18px;
+  }
+
+  .exec-step-name {
+    font-size: 24px;
+  }
+
+  .exec-footer,
+  .debug-row {
+    flex-wrap: wrap;
+  }
+
+  .debug-label {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+@media (max-width: 520px) {
+  .exec-inner {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .gps-number {
+    font-size: 30px;
+  }
+
+  .gps-unit,
+  .status-text,
+  .exec-badge,
+  .loop-badge,
+  .status-ok,
+  .status-pause,
+  .debug-btn {
+    font-size: 11px;
+  }
+
+  .exec-step-name {
+    font-size: 20px;
+  }
+
+  .io-line {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+}
 </style>

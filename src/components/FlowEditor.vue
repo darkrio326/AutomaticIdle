@@ -1005,4 +1005,86 @@ onUnmounted(() => {
   color: var(--text-dim);
   border: 1px solid var(--border);
 }
+
+@media (max-width: 900px) {
+  .flow-editor {
+    padding: 12px;
+  }
+
+  .flow-header {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .flow-header-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .template-row,
+  .template-save-row {
+    flex-wrap: wrap;
+  }
+
+  .template-select,
+  .template-name-input {
+    min-height: 38px;
+  }
+
+  .btn-tpl,
+  .btn-clear-steps {
+    min-height: 36px;
+  }
+
+  .editor-footer {
+    margin: 0 -12px;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .recipe-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .recipe-tooltip {
+    display: none !important;
+  }
+
+  .step-card {
+    padding: 10px;
+  }
+}
+
+@media (max-width: 520px) {
+  .flow-title {
+    font-size: 13px;
+  }
+
+  .badge-auto,
+  .btn-clear-steps,
+  .run-state-ok,
+  .run-state-pause,
+  .run-state-warn {
+    font-size: 11px;
+  }
+
+  .step-top {
+    align-items: flex-start;
+  }
+
+  .step-info {
+    flex-wrap: wrap;
+  }
+
+  .btn-add-recipe {
+    min-height: 44px;
+    font-size: 13px;
+  }
+
+  .loop-count {
+    width: 100%;
+    margin-left: 0;
+  }
+}
 </style>

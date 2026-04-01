@@ -70,6 +70,10 @@ body {
   height: 100%;
 }
 
+body {
+  overscroll-behavior: none;
+}
+
 h1, h2, h3, h4 {
   margin: 0;
   font-weight: 700;
@@ -117,3 +121,14 @@ select:focus, input:focus {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--r-full); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+@media (max-width: 900px) {
+  html, body {
+    overflow: auto;
+    min-height: 100%;
+  }
+
+  body {
+    font-size: 13px;
+  }
+}
