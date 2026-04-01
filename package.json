@@ -7,7 +7,9 @@
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
-    "format:json": "node scripts/format-json.mjs"
+    "format:json": "node scripts/format-json.mjs",
+    "deploy:oss": "bash scripts/deploy-oss.sh",
+    "deploy:oss:no-build": "RUN_BUILD=0 bash scripts/deploy-oss.sh"
   },
   "dependencies": {
     "pinia": "^2.1.7",

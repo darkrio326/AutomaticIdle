@@ -1,6 +1,6 @@
 # CHANGELOG
 
-本文件记录 `docs/project` 维度下的文档与流程变更。
+本文件记录仓库随 Git 提交保留的公开变更。
 
 格式约定：
 - 日期：`YYYY-MM-DD`
@@ -9,12 +9,22 @@
 
 ## [Unreleased]
 
+### 变更
+- [2026-04-01 +0800] 公开文档继续收口：根目录新增 `versions/`，保留可公开提交的版本发布文档（`*RELEASE.md`）；`README.md` 同步补充公开文档入口说明。
+- [2026-04-01 +0800] 开源许可确定为 MIT License：删除 `LICENSE_TODO.md`，新增根目录 `LICENSE` 正式许可证文件。
+- [2026-04-01 +0800] 仓库公开收口：`CHANGELOG.md` 移至仓库根目录；`docs/` 与 `.vscode/` 改为仅本地保留，不再随 GitHub 仓库提交；根目录 `README.md` 同步收紧为公开仓库说明。
+- [2026-04-01 +0800] 公开发布前整理：新增 `.gitignore`、`.env.example`、`LICENSE_TODO.md`；公共化重写根目录 `README.md`；`scripts/deploy-oss.sh` 改为从 `.env` / `.env.local` 或显式环境变量读取部署目标，不再内置默认 OSS bucket/endpoint，且将 `DELETE_REMOTE` 默认值收紧为关闭。
+- [2026-04-01 +0800] 文档分层：`docs/README.md` 新增公开建议；`docs/design/*.md`、`docs/process/*.md`、`docs/prototype/README.md`、`docs/versions/v0.3-plan.md` 增加 `TODO: review before making repo public` 标记；`docs/versions/v0.2-ANNOUNCEMENT.md` 的克隆地址改为占位符；`.vscode/tasks.json` 移除私人部署与固定发布包检查任务，仅保留通用开发/构建/打包任务。
+
 ### 新增
 - [2026-03-30 +0800] 版本规划：新增 `docs/versions/v0.3-plan.md`，整理 v0.3 候选范围（必选/应选/观察项）、推荐切片（ITER-031 ~ ITER-037）、风险控制与候选门禁。
 - [2026-03-30 +0800] 更新根目录 `README.md`：补充"快速开始"命令、新增"v0.2 已实现功能"总表、Roadmap 从 Phase 列表改为版本状态表格（v0.1 ✅ / v0.2 ✅ / v0.3 🔜 / v1.0 💡）。
 - [2026-03-30 +0800] 新增 `docs/versions/v0.2-ANNOUNCEMENT.md`：玩家向的简版发布公告，说明各新功能与体验改善要点，附 v0.3 预告。
 
-### 变更- [2026-03-31 +0800] 新增功能 + 小修改（UI）：(1) **分隔符**：建筑/工具费用展示从"/"改为"+"。(2) **工具升级系统**：`tools.json` 各工具新增 `upgrade` 配置（`maxLevel=5`、`costPerLevel`、`efficiencyPerLevel`）；T1 工具每级提升 1% 效率，T2/T3 提升 2%；`types.ts` 添加 `ToolUpgradeConfig`；`toolStore.ts` 新增 `toolLevels` 状态、`canUpgradeTool`/`upgradeTool`/`restoreToolLevels` 方法；`runtimeEngine.ts` 在计算 timeMultiplier 时叠加升级等级加成；`runtimeTypes.ts` 添加 `toolLevels` 字段；`runtimeStore.ts` 在 `initEngine` 与 `syncPlayerStateFromFlowStore` 时同步 toolLevels 至引擎；`flowStore.ts` 新增 `upgradeTool` action 并在持久化/恢复时携带 toolLevels；`saveService.ts` 新增 `toolLevels` 存档字段；`ToolPanel.vue` 展示升级等级条、消耗与升级按钮。(3) **订单刷新**：活跃订单新增"刷新"按钮（消耗 25 金币），立即生成新订单；`orderStore.ts` 新增 `refreshOrder`，`flowStore.ts` 新增 `refreshOrder`。(4) **删除/丢弃订单需消耗金币**：删除（已过期）/丢弃（活跃）订单各扣 10 金币，不足时提示失败；按钮文案标注费用。- [2026-03-31 +0800] 小修改（UI）：修复右侧“资源库存”部分卡片在窄宽度下数字与速率文本被遮挡的问题。`StatusPanel.vue` 库存网格改为 `minmax(0, 1fr)`，卡片内容允许换行并自适应字号（`clamp`），在较窄视口下自动切为单列；`PlayPage.vue` 右侧面板补充 `overflow-x: hidden` 防止横向溢出裁切。
+### 变更
+- [2026-03-31 +0800] 新增脚本（部署）：新增 `scripts/deploy-oss.sh` 与 npm 命令 `deploy:oss` / `deploy:oss:no-build`，支持一键构建并发布到阿里云 OSS；脚本使用 `ossutil sync` 完成增量上传与远端清理，并支持 `OSS_BUCKET` / `OSS_ENDPOINT` / `RUN_BUILD` / `DELETE_REMOTE` / `OSS_PREFIX` / `DRY_RUN` 环境变量。
+- [2026-03-31 +0800] 新增功能 + 小修改（UI）：(1) **分隔符**：建筑/工具费用展示从"/"改为"+"。(2) **工具升级系统**：`tools.json` 各工具新增 `upgrade` 配置（`maxLevel=5`、`costPerLevel`、`efficiencyPerLevel`）；T1 工具每级提升 1% 效率，T2/T3 提升 2%；`types.ts` 添加 `ToolUpgradeConfig`；`toolStore.ts` 新增 `toolLevels` 状态、`canUpgradeTool`/`upgradeTool`/`restoreToolLevels` 方法；`runtimeEngine.ts` 在计算 timeMultiplier 时叠加升级等级加成；`runtimeTypes.ts` 添加 `toolLevels` 字段；`runtimeStore.ts` 在 `initEngine` 与 `syncPlayerStateFromFlowStore` 时同步 toolLevels 至引擎；`flowStore.ts` 新增 `upgradeTool` action 并在持久化/恢复时携带 toolLevels；`saveService.ts` 新增 `toolLevels` 存档字段；`ToolPanel.vue` 展示升级等级条、消耗与升级按钮。(3) **订单刷新**：活跃订单新增"刷新"按钮（消耗 25 金币），立即生成新订单；`orderStore.ts` 新增 `refreshOrder`，`flowStore.ts` 新增 `refreshOrder`。(4) **删除/丢弃订单需消耗金币**：删除（已过期）/丢弃（活跃）订单各扣 10 金币，不足时提示失败；按钮文案标注费用。
+- [2026-03-31 +0800] 小修改（UI）：修复右侧“资源库存”部分卡片在窄宽度下数字与速率文本被遮挡的问题。`StatusPanel.vue` 库存网格改为 `minmax(0, 1fr)`，卡片内容允许换行并自适应字号（`clamp`），在较窄视口下自动切为单列；`PlayPage.vue` 右侧面板补充 `overflow-x: hidden` 防止横向溢出裁切。
 - [2026-03-30 +0800] 小修改（UI + 订单）：移除 `PlayPage.vue` 全局悬浮提示，购买建筑/工具与订单提交提示改为显示在对应卡片区下方（建筑区、工具区、订单区）；`flowStore.ts` 统一提示前缀（建筑/工具/订单）并补充订单完成成功提示文案。同步扩展 `ordersTemplate.json`：新增更多订单模板（含铁剑需求订单），并为模板增加 `titlePool`，订单标题改为故事化随机文案；`orderStore.ts` 生成订单时优先使用故事化标题。
 - [2026-03-30 +0800] 小修改（bugfix）：修复“完成订单未增加金币”问题。原因是运行中订单奖励先写入 `flowStore.playerState`，随后被 runtime 的定时回写旧状态覆盖。修复：`runtimeStore.ts` 新增 `syncPlayerStateFromFlowStore()`，`flowStore.submitOrder()` 在结算需求/奖励后立即同步引擎库存，确保金币与资源增减即时生效且不会回退。
 - [2026-03-30 +0800] 小修改（UI）：`FlowEditor.vue` 新增上下分栏拖拽（split handle），流程步骤区与添加步骤区均改为独立滚动容器；支持动态调整两区高度并设置最小高度约束，避免任一区块被压缩到不可用。
@@ -88,6 +98,7 @@
 - [2026-03-29 16:46 +0800] 小修改：优化 `README.md` 的"主要系统"与"Roadmap"章节层级，避免混合列表导致的渲染歧义。
 - [2026-03-29 16:41 +0800] 小修改：格式化 `README.md`，统一 Markdown 标题层级、列表样式、代码块与公式展示，移除非标准分隔符与不一致缩进。
 - [2026-03-29 16:30 +0800] 小修改：按标准模板统一格式化 `docs/process/iteration-idea-backlog.md`，修正 IDEA-003 至 IDEA-015 的标题层级、列表符号与条目排版一致性。
+
 ### 新增
 - [YYYY-MM-DD HH:mm +0800] 在此记录本轮新增文档或新增章节。
 
