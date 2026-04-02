@@ -1,0 +1,55 @@
+{
+  "generatedAt": "2026-04-02T01:45:22.290Z",
+  "horizonSeconds": 1200,
+  "orderSample": 400,
+  "results": [
+    {
+      "strategyId": "baseline_iron_ingot",
+      "strategyName": "基线铁锭循环",
+      "netGps": 1.6,
+      "stoppedRatio": 0,
+      "bankruptAtSeconds": null,
+      "orderCompletionRate": 0.585,
+      "highValueOrderCompletionRate": 0.296969696969697,
+      "paybackSeconds": null,
+      "finalGold": 1920,
+      "maintenancePerSecond": 0
+    },
+    {
+      "strategyId": "armory_sword_focus",
+      "strategyName": "铁匠铺铁剑循环",
+      "netGps": 0,
+      "stoppedRatio": 1,
+      "bankruptAtSeconds": 1,
+      "orderCompletionRate": 0.6375,
+      "highValueOrderCompletionRate": 0.43209876543209874,
+      "paybackSeconds": null,
+      "finalGold": 0,
+      "maintenancePerSecond": 0.2
+    },
+    {
+      "strategyId": "copper_chain",
+      "strategyName": "铜链路扩展循环",
+      "netGps": 0,
+      "stoppedRatio": 1,
+      "bankruptAtSeconds": 1,
+      "orderCompletionRate": 0.8975,
+      "highValueOrderCompletionRate": 0.7515151515151515,
+      "paybackSeconds": null,
+      "finalGold": 0,
+      "maintenancePerSecond": 0.35
+    },
+    {
+      "strategyId": "steel_scale",
+      "strategyName": "钢链路规模化循环",
+      "netGps": 0,
+      "stoppedRatio": 1,
+      "bankruptAtSeconds": 1,
+      "orderCompletionRate": 0.64,
+      "highValueOrderCompletionRate": 0.40372670807453415,
+      "paybackSeconds": null,
+      "finalGold": 0,
+      "maintenancePerSecond": 1.35
+    }
+  ]
+}
