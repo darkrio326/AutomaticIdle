@@ -34,6 +34,7 @@ OSS_PREFIX="${OSS_PREFIX:-}"
 RUN_BUILD="${RUN_BUILD:-1}"
 DELETE_REMOTE="${DELETE_REMOTE:-0}"
 DRY_RUN="${DRY_RUN:-0}"
+VITE_ENABLE_ADSENSE="${VITE_ENABLE_ADSENSE:-1}"
 
 if [[ ! -f package.json ]]; then
   echo "[ERROR] 未在项目根目录找到 package.json"
@@ -71,6 +72,7 @@ fi
 
 echo "[INFO] 上传目标: $target"
 echo "[INFO] Endpoint: $OSS_ENDPOINT"
+echo "[INFO] AdSense: ${VITE_ENABLE_ADSENSE} (VITE_ENABLE_ADSENSE)"
 if [[ "$DELETE_REMOTE" == "1" ]]; then
   echo "[INFO] 远端清理: 开启 (--delete)"
 else

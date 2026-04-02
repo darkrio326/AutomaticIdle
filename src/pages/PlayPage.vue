@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import DebugPanel from '@/components/DebugPanel.vue';
+import AdBanner from '@/components/AdBanner.vue';
 import FlowEditor from '@/components/FlowEditor.vue';
 import ExecutionView from '@/components/ExecutionView.vue';
 import NewPlayerGuide from '@/components/NewPlayerGuide.vue';
@@ -209,97 +210,109 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-layout">
-    <div class="mobile-panel-nav">
-      <NewPlayerGuide
-        v-if="showNewPlayerGuide"
-        mode="mobile"
-        :countdown-left="guideCountdownLeft"
-        @go-flow="jumpToFlowPanel"
-        @acknowledge="dismissGuide"
-      />
-      <div class="mobile-runtime-bar">
-        <div class="mobile-runtime-metric">
-          <span class="mobile-runtime-label">实时收益</span>
-          <span class="mobile-runtime-value">
-            {{ runtimeStore.currentStableGps.toFixed(2) }}
-            <span class="mobile-runtime-unit">G/s</span>
-          </span>
-          <span class="mobile-runtime-sub">
-            本机历史最佳 {{ runtimeStore.localBestGps.toFixed(2) }} · {{ mobileGpsDeltaText }}
-          </span>
+  <div class="play-page">
+    <div class="app-layout">
+      <div class="mobile-panel-nav">
+        <NewPlayerGuide
+          v-if="showNewPlayerGuide"
+          mode="mobile"
+          :countdown-left="guideCountdownLeft"
+          @go-flow="jumpToFlowPanel"
+          @acknowledge="dismissGuide"
+        />
+        <div class="mobile-runtime-bar">
+          <div class="mobile-runtime-metric">
+            <span class="mobile-runtime-label">实时收益</span>
+            <span class="mobile-runtime-value">
+              {{ runtimeStore.currentStableGps.toFixed(2) }}
+              <span class="mobile-runtime-unit">G/s</span>
+            </span>
+            <span class="mobile-runtime-sub">
+              本机历史最佳 {{ runtimeStore.localBestGps.toFixed(2) }} · {{ mobileGpsDeltaText }}
+            </span>
+          </div>
+          <div class="mobile-runtime-chip" :class="mobileStatusClass">
+            {{ mobileStatusText }}
+          </div>
         </div>
-        <div class="mobile-runtime-chip" :class="mobileStatusClass">
-          {{ mobileStatusText }}
-        </div>
+        <button
+          class="mobile-panel-tab"
+          :class="{ 'mobile-panel-tab--active': activeMobilePanel === 'flow' }"
+          @click="switchMobilePanel('flow')"
+        >流程</button>
+        <button
+          class="mobile-panel-tab"
+          :class="{ 'mobile-panel-tab--active': activeMobilePanel === 'runtime' }"
+          @click="switchMobilePanel('runtime')"
+        >运行</button>
+        <button
+          class="mobile-panel-tab"
+          :class="{ 'mobile-panel-tab--active': activeMobilePanel === 'status' }"
+          @click="switchMobilePanel('status')"
+        >状态</button>
       </div>
-      <button
-        class="mobile-panel-tab"
-        :class="{ 'mobile-panel-tab--active': activeMobilePanel === 'flow' }"
-        @click="switchMobilePanel('flow')"
-      >流程</button>
-      <button
-        class="mobile-panel-tab"
-        :class="{ 'mobile-panel-tab--active': activeMobilePanel === 'runtime' }"
-        @click="switchMobilePanel('runtime')"
-      >运行</button>
-      <button
-        class="mobile-panel-tab"
-        :class="{ 'mobile-panel-tab--active': activeMobilePanel === 'status' }"
-        @click="switchMobilePanel('status')"
-      >状态</button>
-    </div>
 
-    <!-- 左：流程编辑区 -->
-    <div
-      class="panel panel-left"
-      :class="{ 'panel-mobile-hidden': activeMobilePanel !== 'flow' }"
-    >
-      <FlowEditor />
-    </div>
-    <!-- 中：实时运行区 -->
-    <div
-      class="panel panel-center"
-      :class="{ 'panel-mobile-hidden': activeMobilePanel !== 'runtime' }"
-    >
-      <div ref="panelCenterStackRef" class="panel-center-stack">
-        <div class="panel-center-main" :style="showDebugPanel ? panelCenterMainStyle : undefined">
-          <ExecutionView
-            :show-new-player-guide="showNewPlayerGuide"
-            :guide-countdown-left="guideCountdownLeft"
-            @acknowledge-guide="dismissGuide"
+      <div
+        class="panel panel-left"
+        :class="{ 'panel-mobile-hidden': activeMobilePanel !== 'flow' }"
+      >
+        <FlowEditor />
+      </div>
+
+      <div
+        class="panel panel-center"
+        :class="{ 'panel-mobile-hidden': activeMobilePanel !== 'runtime' }"
+      >
+        <div ref="panelCenterStackRef" class="panel-center-stack">
+          <div class="panel-center-main" :style="showDebugPanel ? panelCenterMainStyle : undefined">
+            <ExecutionView
+              :show-new-player-guide="showNewPlayerGuide"
+              :guide-countdown-left="guideCountdownLeft"
+              @acknowledge-guide="dismissGuide"
+            />
+          </div>
+          <div
+            v-if="showDebugPanel"
+            class="panel-center-split-handle"
+            title="拖拽调整运行面板和调试面板高度"
+            @pointerdown="onCenterSplitPointerDown"
+          >
+            <span class="panel-center-split-dot"></span>
+          </div>
+          <DebugPanel
+            v-if="showDebugPanel"
+            class="panel-center-debug"
+            :style="panelCenterDebugStyle"
+            :embedded="true"
           />
         </div>
-        <div
-          v-if="showDebugPanel"
-          class="panel-center-split-handle"
-          title="拖拽调整运行面板和调试面板高度"
-          @pointerdown="onCenterSplitPointerDown"
-        >
-          <span class="panel-center-split-dot"></span>
-        </div>
-        <DebugPanel
-          v-if="showDebugPanel"
-          class="panel-center-debug"
-          :style="panelCenterDebugStyle"
-          :embedded="true"
-        />
+      </div>
+
+      <div
+        class="panel panel-right"
+        :class="{ 'panel-mobile-hidden': activeMobilePanel !== 'status' }"
+      >
+        <StatusPanel />
       </div>
     </div>
-    <!-- 右：状态面板 -->
-    <div
-      class="panel panel-right"
-      :class="{ 'panel-mobile-hidden': activeMobilePanel !== 'status' }"
-    >
-      <StatusPanel />
-    </div>
+    <AdBanner class="play-page-ad" />
   </div>
 </template>
 
 <style scoped>
+.play-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  background: var(--bg-root);
+}
+
 .app-layout {
   display: flex;
-  height: 100dvh;
+  flex: 1;
+  min-height: 0;
   width: 100%;
   background: var(--bg-root);
   overflow: hidden;
@@ -381,6 +394,11 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
+  .play-page {
+    height: auto;
+    min-height: 100dvh;
+  }
+
   .app-layout {
     flex-direction: column;
     overscroll-behavior: none;

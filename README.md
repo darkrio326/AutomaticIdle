@@ -73,6 +73,14 @@ npm run preview   # 预览构建结果
 npm run typecheck # TypeScript 检查
 ```
 
+广告位开关：
+
+```bash
+VITE_ENABLE_ADSENSE=0 npm run build
+```
+
+部署脚本会读取 `.env` / `.env.local` 中的 `VITE_ENABLE_ADSENSE`，默认值为 `1`。
+
 默认开发地址会由 Vite 在终端输出。
 
 ## 在线试玩
