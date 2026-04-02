@@ -10,6 +10,8 @@
 ## [Unreleased]
 
 ### 变更
+- [2026-04-02 +0800] 修复（安卓滚动）：修复部分安卓设备在 `PlayPage` 里滚动“卡住”问题。调整为触屏设备禁用上下分割拖拽（`FlowEditor` 与调试分栏），避免 `pointermove + preventDefault` 抢占滚动；同时放宽移动端 `overscroll-behavior`（`PlayPage.vue`、`style.css`）以恢复正常滚动链路。
+- [2026-04-02 +0800] 小修改（文档修复）：修复 `docs/process/iteration-idea-backlog.md` 在 `v0.3 迭代 IDEA 池` 附近的 Markdown 结构粘连问题（标题与列表断行丢失、分隔符位置错乱），恢复 IDEA-039 ~ IDEA-043 段落的可读性与完整性。
 - [2026-04-02 +0800] 小修改（广告位部署）：`scripts/deploy-oss.sh` 现输出 `VITE_ENABLE_ADSENSE` 当前值，便于部署时确认广告是否随本次生产包一并启用；`README.md` 同步补充构建/部署侧广告开关用法。
 - [2026-04-02 +0800] 小修改（广告位判定）：桌面端 AdSense 增加 `MutationObserver` 监听 `data-ad-status`、子节点与 iframe 渲染结果；当返回 `unfilled` 或超时仍未真正填充内容时自动折叠，减少误判与空白占位。
 - [2026-04-02 +0800] 小修改（广告位开关）：为桌面端 AdSense 增加 `VITE_ENABLE_ADSENSE` 环境开关，默认开启；关闭时组件不再注入广告位容器，便于灰度、回滚或本地临时停投。

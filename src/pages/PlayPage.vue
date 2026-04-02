@@ -20,6 +20,7 @@ const orderStore = useOrderStore();
 const route = useRoute();
 const activeMobilePanel = ref<MobilePanel>('flow');
 const showDebugPanel = computed(() => route.query.debug === '1');
+const isCoarsePointer = ref(false);
 const panelCenterStackRef = ref<HTMLElement | null>(null);
 const centerSplitRatio = ref(0.68);
 
@@ -70,6 +71,7 @@ function onCenterSplitPointerUp(event?: PointerEvent): void {
 }
 
 function onCenterSplitPointerDown(event: PointerEvent): void {
+  if (isCoarsePointer.value) return;
   event.preventDefault();
   activeCenterSplitPointerId = event.pointerId;
   draggingCenterSplit = true;
@@ -187,6 +189,7 @@ function handlePageHide(): void {
 }
 
 onMounted(() => {
+  isCoarsePointer.value = window.matchMedia('(pointer: coarse)').matches;
   trackGameEnter();
   window.addEventListener('pagehide', handlePageHide);
 
@@ -272,7 +275,7 @@ onBeforeUnmount(() => {
             />
           </div>
           <div
-            v-if="showDebugPanel"
+            v-if="showDebugPanel && !isCoarsePointer"
             class="panel-center-split-handle"
             title="拖拽调整运行面板和调试面板高度"
             @pointerdown="onCenterSplitPointerDown"
@@ -401,7 +404,7 @@ onBeforeUnmount(() => {
 
   .app-layout {
     flex-direction: column;
-    overscroll-behavior: none;
+    overscroll-behavior-y: auto;
   }
 
   .mobile-panel-nav {
@@ -543,7 +546,7 @@ onBeforeUnmount(() => {
     height: auto;
     flex: 1;
     overflow: auto;
-    overscroll-behavior: contain;
+    overscroll-behavior-y: auto;
     -webkit-overflow-scrolling: touch;
   }
 

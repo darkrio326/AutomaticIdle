@@ -649,12 +649,12 @@
   - `src/stores/orderStore.ts`（3 槽位、加权随机、时限、冷却）
   - `src/stores/flowStore.ts`（订单提交、丢弃、刷新费用与状态同步）
   - `src/components/StatusPanel.vue`（订单卡片在线播放与交互）
-
-
   - `src/core/orderGuidance.ts`（`getBiasedTemplateWeight` 订单权重按解锁阶段、库存、常用链路偏置；`buildOrderGuidance` 生成订单流程引导文本）
   - `src/core/orderGuidance.spec.ts`（orderGuidance 单测）
   - `src/stores/orderStore.ts`（接入 `getBiasedTemplateWeight` 与 `getOrderGuidance`）
-  - `src/components/StatusPanel.vue`（高价值订单徽章、订单引导文本展示 `order-guide-*`）### IDEA-039 生产动态调优脚本（Config 反哺分析器）
+  - `src/components/StatusPanel.vue`（高价值订单徽章、订单引导文本展示 `order-guide-*`）
+
+### IDEA-039 生产动态调优脚本（Config 反哺分析器）
 - 状态：DONE
 - 优先级：P1
 - 来源：数值平衡与迭代效率需求
@@ -670,13 +670,14 @@
   - `scripts/tune-balance.mjs`
   - 面向典型流程的 md/json 报告输出
   - GPS、停工率、订单完成率、工具回本时间等关键指标摘要
-- 已落地产物：simulator、runtime、资源链设计、工具链设计、建筑解锁设计、订单系统设计、配置驱动架构
+- 已落地产物：
+  - simulator、runtime、资源链设计、工具链设计、建筑解锁设计、订单系统设计、配置驱动架构
+  - `scripts/tune-balance.mjs`（342 行，模拟多种典型流程策略在 20 分钟时间窗口下的收益、资源流、订单完成率、工具投资回本时间；输出 GPS 对比、瓶颈提示、订单收益率等关键指标）
 
 ## v0.3 迭代 IDEA 池
 ---
 
-
-  - `scripts/tune-balance.mjs`（342 行，模拟多种典型流程策略在 20 分钟时间窗口下的收益、资源流、订单完成率、工具投资回本时间；输出 GPS 对比、瓶颈提示、订单收益率等关键指标）### IDEA-040 持续金币消耗系统
+### IDEA-040 持续金币消耗系统
 
 - 状态：DONE
 - 优先级：P0
@@ -697,17 +698,17 @@
   - `src/config/buildings.json` / `src/config/tools.json`（资产对象已配置化）
   - `src/stores/toolStore.ts`（工具升级已形成金币消耗路径）
   - `src/stores/flowStore.ts` / `src/components/StatusPanel.vue`（订单刷新、丢弃已具备金币消耗）
-
----
-
-
   - `src/config/buildings.json`（各建筑 `maintenanceGoldPerSecond` 字段：0.2 / 0.35 / 0.5 / 0.85）
   - `src/core/economy.ts`（`calcBuildingMaintenancePerSecond` 汇总购买建筑的维护费）
   - `src/core/runtimeEngine.ts`（tick 中按 deltaMs 实时扣除维护金币，`netGps` = 毛收益 − 维护费）
   - `src/core/runtimeTypes.ts`（`maintenancePerSecond` 字段）
   - `src/stores/runtimeStore.ts`（`lowBalanceSeconds`、`economyWarningText` getter）
   - `src/components/StatusPanel.vue`（`economy-warning` 低余额预警展示）
-  - 备注：工具维修机制经压测评估后决定不引入，避免惩罚型体验### IDEA-041 收益可视化与历史记录系统
+  - 备注：工具维修机制经压测评估后决定不引入，避免惩罚型体验
+
+---
+
+### IDEA-041 收益可视化与历史记录系统
 
 - 状态：DONE
 - 优先级：P0
@@ -727,12 +728,12 @@
 - 已落地产物：
   - `src/stores/runtimeStore.ts` / `src/core/runtimeEngine.ts`（实时 GPS）
   - `src/components/ExecutionView.vue` / `src/pages/PlayPage.vue`（当前收益展示）
+  - `src/stores/runtimeStore.ts`（`bestStableGps`、`localBestGps` 历史峰值字段，localStorage 持久化）
+  - `src/components/ExecutionView.vue`（展示"当前轮次最佳 GPS"与实时 GPS 对比）
 
 ---
 
-
-  - `src/stores/runtimeStore.ts`（`bestStableGps`、`localBestGps` 历史峰值字段，localStorage 持久化）
-  - `src/components/ExecutionView.vue`（展示"当前轮次最佳 GPS"与实时 GPS 对比）### IDEA-042 技术点与重开循环系统（Prestige）
+### IDEA-042 技术点与重开循环系统（Prestige）
 
 - 状态：DONE
 - 优先级：P0
@@ -750,15 +751,16 @@
   - 重生结算规则：`techPointGain = floor(6 * log2(bestStableGps / 5 + 1))`
   - 重生后全局效率：`1 + totalTechPoints * 2%`
   - UI 文案：重生按钮上方显示“当前可获得 / 当前总技术点 / 重生后全局效率”预览
-- 已落地产物：`runtime` 实时收益基础、资源与工具成长链路
-
----
-
-
+- 已落地产物：
+  - `runtime` 实时收益基础、资源与工具成长链路
   - `src/core/runtimeTypes.ts`（`totalTechPoints` 字段）
   - `src/stores/runtimeStore.ts`（`techPointGain`、`previewTotalTechPoints`、`globalEfficiencyMultiplier`、`prestigeReset()` action）
   - `src/components/StatusPanel.vue`（"再来一轮"面板：当前可获得技术点预览、重置后效率预览、确认重开按钮）
-  - `src/services/analyticsService.ts`（重开事件埋点 `trackPrestigeConfirm`）### IDEA-043 售卖决策分层（商品体系升级）
+  - `src/services/analyticsService.ts`（重开事件埋点 `trackPrestigeConfirm`）
+
+---
+
+### IDEA-043 售卖决策分层（商品体系升级）
 
 - 状态：DEFERRED
 - 优先级：P1
@@ -821,22 +823,22 @@
   - UI 入口：导出按钮、导入弹窗、覆盖确认与错误提示
   - 文档：存档字符串使用说明与兼容策略
 
-  ---
+---
 
-  ### IDEA-046 前端埋点与关键行为漏斗
+### IDEA-046 前端埋点与关键行为漏斗
 
-  - 状态：DONE
-  - 优先级：P1
-  - 来源：版本发布后行为数据缺失，无法判断新手漏斗与核心操作完成率
-  - 日期：2026-04-02
-  - 建议版本：v0.3.x
-  - 相关模块：ui、runtime、order、storage、analytics
-  - 描述：在当前版本补一套轻量前端埋点，覆盖从欢迎页到主玩法的关键行为，优先统计“开始游戏点击数、进入游戏页人数、平均停留时长、完成一次有效操作人数（改流程 / 下单 / 重生）”等核心指标。事件命名遵循统一前缀与字段结构，先落地本地聚合与可导出方案，后续可无缝切换到远端上报。
-  - 价值：把“功能是否有人用、在哪一步流失、改动后是否变好”从体感判断升级为可量化指标，为 v0.3.x 的交互优化和 v0.4 范围决策提供依据。
-  - 风险：埋点过多会侵入业务代码；口径不统一会导致数据不可比；若直接上远端依赖会增加部署与隐私说明成本。
-  - 结论：建议纳入近期迭代，先做轻量可用版。
-  - 原因：当前已有完整玩法闭环，但缺少行为漏斗数据；先做统一事件字典 + 客户端聚合可在低成本下快速建立数据反馈回路。
-  - 计划落地产物：
+- 状态：DONE
+- 优先级：P1
+- 来源：版本发布后行为数据缺失，无法判断新手漏斗与核心操作完成率
+- 日期：2026-04-02
+- 建议版本：v0.3.x
+- 相关模块：ui、runtime、order、storage、analytics
+- 描述：在当前版本补一套轻量前端埋点，覆盖从欢迎页到主玩法的关键行为，优先统计“开始游戏点击数、进入游戏页人数、平均停留时长、完成一次有效操作人数（改流程 / 下单 / 重生）”等核心指标。事件命名遵循统一前缀与字段结构，先落地本地聚合与可导出方案，后续可无缝切换到远端上报。
+- 价值：把“功能是否有人用、在哪一步流失、改动后是否变好”从体感判断升级为可量化指标，为 v0.3.x 的交互优化和 v0.4 范围决策提供依据。
+- 风险：埋点过多会侵入业务代码；口径不统一会导致数据不可比；若直接上远端依赖会增加部署与隐私说明成本。
+- 结论：建议纳入近期迭代，先做轻量可用版。
+- 原因：当前已有完整玩法闭环，但缺少行为漏斗数据；先做统一事件字典 + 客户端聚合可在低成本下快速建立数据反馈回路。
+- 计划落地产物：
     - 事件字典（v1）与字段约定：
       - `landing_view`：进入欢迎页
       - `click_start_game`：点击开始游戏按钮
@@ -864,11 +866,11 @@
       - 关键漏斗事件在一次完整新手路径中均可触发
       - 停留时长与有效操作人数统计可复算、可导出
       - 默认玩家路径无明显性能回退（事件上报批处理，不阻塞主线程）
-  - 已落地产物：
-    - `src/services/analyticsService.ts`（262 行，`AnalyticsEvent` 类型、`track()` 内核、会话管理、停留时长、`getAnalyticsSummary()` 可导出摘要）
-    - 事件覆盖：`landing_view` / `click_start_game` / `game_enter` / `first_flow_edit` / `run_start` / `resource_blocked` / `tool_upgrade` / `building_unlock` / `order_complete` / `prestige_confirm`
-    - `src/pages/WelcomePage.vue` / `src/pages/PlayPage.vue`（`trackLandingView` / `trackGameEnter` / `trackRunStart` 等埋点挂载）
-    - `src/components/StatusPanel.vue`（`trackPrestigeConfirm`、`trackOrderComplete`）
+- 已落地产物：
+  - `src/services/analyticsService.ts`（262 行，`AnalyticsEvent` 类型、`track()` 内核、会话管理、停留时长、`getAnalyticsSummary()` 可导出摘要）
+  - 事件覆盖：`landing_view` / `click_start_game` / `game_enter` / `first_flow_edit` / `run_start` / `resource_blocked` / `tool_upgrade` / `building_unlock` / `order_complete` / `prestige_confirm`
+  - `src/pages/WelcomePage.vue` / `src/pages/PlayPage.vue`（`trackLandingView` / `trackGameEnter` / `trackRunStart` 等埋点挂载）
+  - `src/components/StatusPanel.vue`（`trackPrestigeConfirm`、`trackOrderComplete`）
 
 ### IDEA-047 空存档新手引导模块（首屏防流失）
 

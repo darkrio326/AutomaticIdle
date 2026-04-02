@@ -130,5 +130,6 @@ select:focus, input:focus {
 
   body {
     font-size: 13px;
+    overscroll-behavior: auto;
   }
 }

@@ -8,10 +8,12 @@ import { useFlowTemplateStore } from '@/stores/flowTemplateStore';
 const flowStore = useFlowStore();
 const runtimeStore = useRuntimeStore();
 const templateStore = useFlowTemplateStore();
+const isCoarsePointer = ref(false);
 
 // ── 离线消息弹窗 ──
 const showOfflineModal = ref(false);
 onMounted(() => {
+  isCoarsePointer.value = window.matchMedia('(pointer: coarse)').matches;
   if (flowStore.offlineMessage) showOfflineModal.value = true;
 });
 
@@ -70,6 +72,7 @@ function onSplitPointerUp(event?: PointerEvent): void {
 }
 
 function onSplitPointerDown(event: PointerEvent): void {
+  if (isCoarsePointer.value) return;
   event.preventDefault();
   activePointerId = event.pointerId;
   draggingSplit = true;
@@ -1085,6 +1088,10 @@ onUnmounted(() => {
 }
 
 @media (max-width: 900px) {
+  .split-handle {
+    display: none;
+  }
+
   .flow-editor {
     padding: 12px;
   }
