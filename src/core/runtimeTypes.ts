@@ -51,9 +51,19 @@ export interface RuntimeState {
   /** 工具升级等级（toolId → 当前等级），供引擎计算效率加成使用 */
   toolLevels: Record<string, number>;
 
+  /** 累计技术点（跨轮次保留），用于全局效率加成 */
+  totalTechPoints: number;
+
+  /** 已购建筑 ID，用于维护费计算 */
+  purchasedBuildingIds: string[];
+
   // ── 统计摘要 ──────────────────────────────────────────────
   /** 实时每秒金币收益（5s 滑动窗口估算）*/
   gps: number;
+  /** 当前建筑维护费（金币 / 秒） */
+  maintenancePerSecond: number;
+  /** 最近一次自动停机原因（资源不足/维护费不足） */
+  lastStopReason: string;
   /** GPS 滑动窗口内累计金币 */
   goldInWindow: number;
   /** GPS 滑动窗口已累计时长（ms）*/
@@ -76,7 +86,11 @@ export function createInitialRuntimeState(
     currentRepeatTotalMs: 0,
     playerState,
     toolLevels: {},
+    totalTechPoints: 0,
+    purchasedBuildingIds: [],
     gps: 0,
+    maintenancePerSecond: 0,
+    lastStopReason: '',
     goldInWindow: 0,
     gpsWindowMs: 0,
   };

@@ -7,6 +7,13 @@ import buildingsObj from '@/config/buildings.json';
 import toolsObj from '@/config/tools.json';
 import { simulateFlow } from '@/core/simulator';
 import { applyExpGains, calcRequiredExp } from '@/core/expSystem';
+import { calcBuildingMaintenancePerSecond } from '@/core/economy';
+import {
+  trackBuildingUnlock,
+  trackFirstFlowEdit,
+  trackOrderComplete,
+  trackToolUpgrade,
+} from '@/services/analyticsService';
 import { loadSaveSnapshot, saveSnapshot } from '@/services/saveService';
 import { useBuildingStore } from './buildingStore';
 import { useToolStore } from './toolStore';
@@ -167,12 +174,13 @@ function settleOfflineProgress(
   return null;
 }
 
-function calcDisplayRecipeTimeSeconds(
+export function calcDisplayRecipeTimeSeconds(
   recipe: RecipeConfig,
   playerState: PlayerState,
   gameConfig: GameConfig,
 ): number {
   const toolStore = useToolStore();
+  const runtimeStore = useRuntimeStore();
 
   // 计算技能加速
   let skillMultiplier = 1;
@@ -192,7 +200,9 @@ function calcDisplayRecipeTimeSeconds(
     toolMultiplier = bestTool.timeMultiplier;
   }
 
-  return Math.max(0, recipe.timeSeconds * skillMultiplier * toolMultiplier);
+  const globalEfficiencyMultiplier = 1 + Math.max(0, runtimeStore.totalTechPoints) * 0.02;
+
+  return Math.max(0, (recipe.timeSeconds * skillMultiplier * toolMultiplier) / globalEfficiencyMultiplier);
 }
 
 function buildGameConfig(): GameConfig {
@@ -323,9 +333,13 @@ function buildInitialState() {
     flowName: snapshot.flowName || '默认流程',
     steps: safeSteps.map((s) => ({ recipeId: s.recipeId, repeat: s.repeat })),
     playerState: restoredPlayerState,
+    bestStableGps: snapshot.bestStableGps,
+    localBestGps: snapshot.localBestGps,
+    totalTechPoints: snapshot.totalTechPoints,
     unlockedRecipeIds,
     purchasedBuildingIds: snapshot.purchasedBuildingIds,
     purchasedToolIds: snapshot.purchasedToolIds,
+    toolLevels: snapshot.toolLevels,
     orderSlots: snapshot.orderSlots,
     lastSavedAt: now,
   });
@@ -375,6 +389,7 @@ export const useFlowStore = defineStore('flow', {
       return getFlowValidationError(state.steps, state.gameConfig);
     },
     displayGps(state): number {
+      const buildingStore = useBuildingStore();
       let totalGold = 0;
       let totalTime = 0;
 
@@ -394,7 +409,19 @@ export const useFlowStore = defineStore('flow', {
         }
       }
 
-      return totalTime > 0 ? totalGold / totalTime : 0;
+      const grossGps = totalTime > 0 ? totalGold / totalTime : 0;
+      const maintenancePerSecond = calcBuildingMaintenancePerSecond(
+        buildingStore.getPurchasedBuildingIds,
+        state.gameConfig,
+      );
+      return grossGps - maintenancePerSecond;
+    },
+    displayMaintenancePerSecond(state): number {
+      const buildingStore = useBuildingStore();
+      return calcBuildingMaintenancePerSecond(
+        buildingStore.getPurchasedBuildingIds,
+        state.gameConfig,
+      );
     },
     canApplyResult(state): boolean {
       if (!state.result) return false;
@@ -515,6 +542,7 @@ export const useFlowStore = defineStore('flow', {
       const buildingStore = useBuildingStore();
       const toolStore = useToolStore();
       const orderStore = useOrderStore();
+      const runtimeStore = useRuntimeStore();
       const unlockedRecipeIds = Object.values(this.gameConfig.recipes)
         .filter((r) => r.enabled !== false)
         .map((r) => r.id);
@@ -524,6 +552,9 @@ export const useFlowStore = defineStore('flow', {
         flowName: this.flowName,
         steps: this.steps.map((s) => ({ recipeId: s.recipeId, repeat: s.repeat })),
         playerState: this.playerState,
+        bestStableGps: runtimeStore.bestStableGps,
+        localBestGps: runtimeStore.localBestGps,
+        totalTechPoints: runtimeStore.totalTechPoints,
         unlockedRecipeIds,
         purchasedBuildingIds: buildingStore.getPurchasedBuildingIds,
         purchasedToolIds: toolStore.getPurchasedToolIds,
@@ -547,6 +578,7 @@ export const useFlowStore = defineStore('flow', {
       }
       this.steps = nextSteps;
       this.persistState();
+      trackFirstFlowEdit();
       return true;
     },
     removeStep(uid: number): void {
@@ -558,6 +590,7 @@ export const useFlowStore = defineStore('flow', {
       }
       this.steps = nextSteps;
       this.persistState();
+      trackFirstFlowEdit();
     },
     replaceSteps(steps: Array<{ recipeId: string; repeat: number }>): void {
       const nextSteps = steps.map((s) => ({
@@ -572,6 +605,7 @@ export const useFlowStore = defineStore('flow', {
       }
       this.steps = nextSteps;
       this.persistState();
+      trackFirstFlowEdit();
     },
     updateStepRecipe(uid: number, recipeId: string): void {
       const step = this.steps.find((s) => s.uid === uid);
@@ -586,12 +620,14 @@ export const useFlowStore = defineStore('flow', {
       }
       step.recipeId = recipeId;
       this.persistState();
+      trackFirstFlowEdit();
     },
     updateStepRepeat(uid: number, repeat: number): void {
       const step = this.steps.find((s) => s.uid === uid);
       if (!step) return;
       step.repeat = Math.max(1, Math.floor(repeat));
       this.persistState();
+      trackFirstFlowEdit();
     },
     runSimulation(): void {
       this.errorMessage = '';
@@ -676,6 +712,7 @@ export const useFlowStore = defineStore('flow', {
         .map((r) => `${this.gameConfig.resources[r.resourceId]?.name ?? r.resourceId} +${r.amount}`)
         .join(' / ');
       pushUiMessage(this, `订单完成：${order.name}（奖励：${rewardText}）`, 3000);
+      trackOrderComplete(order.instanceId);
 
       orderStore.completeOrder(instanceId);
       this.persistState();
@@ -742,6 +779,7 @@ export const useFlowStore = defineStore('flow', {
     purchaseBuilding(buildingId: string): void {
       this.errorMessage = '';
       const buildingStore = useBuildingStore();
+      const runtimeStore = useRuntimeStore();
 
       const check = buildingStore.canPurchaseBuilding(buildingId, this.playerState, this.gameConfig);
       if (!check.canBuy) {
@@ -766,7 +804,10 @@ export const useFlowStore = defineStore('flow', {
       }
 
       pushUiMessage(this, `建筑购买成功：${building?.name ?? buildingId}`, 3000);
+      trackBuildingUnlock(buildingId);
 
+      runtimeStore.syncPlayerStateFromFlowStore();
+      runtimeStore.notifyConfigChanged();
       this.persistState();
     },
 
@@ -833,6 +874,25 @@ export const useFlowStore = defineStore('flow', {
       this.persistState();
     },
 
+    resetProgressForPrestige(): void {
+      const buildingStore = useBuildingStore();
+      const toolStore = useToolStore();
+      const orderStore = useOrderStore();
+
+      this.playerState = buildInitialPlayerState();
+      this.steps = [];
+      this.result = null;
+      this.errorMessage = '';
+      this.offlineMessage = '';
+      this.gameConfig = buildGameConfig();
+
+      buildingStore.clearPurchasedBuildings();
+      toolStore.clearPurchasedTools();
+      orderStore.stopTick();
+      orderStore.resetSlots();
+      orderStore.startTick(this.gameConfig);
+    },
+
     /**
      * 升级工具
      */
@@ -857,6 +917,7 @@ export const useFlowStore = defineStore('flow', {
       const newLevel = toolStore.toolLevels[toolId] ?? 1;
       const maxLevel = this.gameConfig.tools?.[toolId]?.upgrade?.maxLevel ?? 5;
       pushUiMessage(this, `工具升级成功：${toolName} Lv.${newLevel}/${maxLevel}`, 3000);
+      trackToolUpgrade(toolId, newLevel);
       this.persistState();
     },
   },

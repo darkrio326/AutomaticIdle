@@ -95,6 +95,35 @@ export const useToolStore = defineStore('tool', {
   },
 
   actions: {
+    hasHigherTierToolCoveringRecipes(
+      toolId: string,
+      gameConfig: GameConfig,
+    ): boolean {
+      const currentTool = gameConfig.tools?.[toolId];
+      if (!currentTool) return false;
+
+      const currentTier = currentTool.tier ?? 0;
+      const coveredRecipeIds = new Set(Object.keys(currentTool.effects ?? {}));
+      if (coveredRecipeIds.size === 0) return false;
+
+      for (const purchasedToolId of this.purchasedTools) {
+        if (purchasedToolId === toolId) continue;
+        const purchasedTool = gameConfig.tools?.[purchasedToolId];
+        if (!purchasedTool) continue;
+
+        const purchasedTier = purchasedTool.tier ?? 0;
+        if (purchasedTier <= currentTier) continue;
+
+        for (const recipeId of Object.keys(purchasedTool.effects ?? {})) {
+          if (coveredRecipeIds.has(recipeId)) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    },
+
     /**
      * 检查是否可以购买指定工具
      */
@@ -190,6 +219,9 @@ export const useToolStore = defineStore('tool', {
       const toolConfig = gameConfig.tools?.[toolId];
       if (!toolConfig?.upgrade) {
         return { canUpgrade: false, reason: '该工具不支持升级' };
+      }
+      if (this.hasHigherTierToolCoveringRecipes(toolId, gameConfig)) {
+        return { canUpgrade: false, reason: '已拥有覆盖该链路的更高阶工具，无需升级低阶工具' };
       }
       const currentLevel = this.toolLevels[toolId] ?? 0;
       if (currentLevel >= toolConfig.upgrade.maxLevel) {

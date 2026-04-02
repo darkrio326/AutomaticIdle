@@ -6,6 +6,9 @@
     "dev": "vite",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:runtime": "vitest run src/core/runtimeEngine.spec.ts",
+    "tune:balance": "node scripts/tune-balance.mjs",
     "typecheck": "vue-tsc --noEmit",
     "format:json": "node scripts/format-json.mjs",
     "deploy:oss": "bash scripts/deploy-oss.sh",
@@ -20,6 +23,7 @@
     "@vitejs/plugin-vue": "^5.0.4",
     "typescript": "^5.4.3",
     "vite": "^5.2.0",
+    "vitest": "^4.1.2",
     "vue-tsc": "^2.0.6"
   }
 }

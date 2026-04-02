@@ -5,6 +5,9 @@ import { useToolStore } from '@/stores/toolStore';
 
 const flowStore = useFlowStore();
 const toolStore = useToolStore();
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), {
+  embedded: false,
+});
 
 interface ToolEffect {
   recipeId: string;
@@ -120,8 +123,8 @@ function handleUpgradeTool(toolId: string): void {
 </script>
 
 <template>
-  <section class="panel-section">
-    <div class="section-header">
+  <div :class="props.embedded ? 'panel-body' : 'panel-section'">
+    <div v-if="!props.embedded" class="section-header">
       <span class="section-icon">🔧</span>
       <h3 class="section-title">工具系统</h3>
     </div>
@@ -197,7 +200,7 @@ function handleUpgradeTool(toolId: string): void {
     >
       {{ toolMessage }}
     </div>
-  </section>
+  </div>
 </template>
 
 <style scoped>
@@ -205,6 +208,11 @@ function handleUpgradeTool(toolId: string): void {
   border-bottom: 1px solid var(--border);
   padding-bottom: 16px;
   margin-bottom: 16px;
+}
+
+.panel-body {
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-section:last-child {

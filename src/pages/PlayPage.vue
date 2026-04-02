@@ -1,18 +1,88 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
+import DebugPanel from '@/components/DebugPanel.vue';
 import FlowEditor from '@/components/FlowEditor.vue';
 import ExecutionView from '@/components/ExecutionView.vue';
 import StatusPanel from '@/components/StatusPanel.vue';
 import { useRuntimeStore } from '@/stores/runtimeStore';
 import { useFlowStore } from '@/stores/flowStore';
 import { useOrderStore } from '@/stores/orderStore';
+import { flushGameStay, trackGameEnter } from '@/services/analyticsService';
 
 type MobilePanel = 'flow' | 'runtime' | 'status';
 
 const runtimeStore = useRuntimeStore();
 const flowStore = useFlowStore();
 const orderStore = useOrderStore();
+const route = useRoute();
 const activeMobilePanel = ref<MobilePanel>('flow');
+const showDebugPanel = computed(() => route.query.debug === '1');
+const panelCenterStackRef = ref<HTMLElement | null>(null);
+const centerSplitRatio = ref(0.68);
+
+let draggingCenterSplit = false;
+let activeCenterSplitPointerId: number | null = null;
+
+const CENTER_SPLIT_MIN_MAIN = 220;
+const CENTER_SPLIT_MIN_DEBUG = 170;
+const CENTER_SPLIT_HANDLE_HEIGHT = 10;
+
+function clampCenterSplitRatio(ratio: number): number {
+  const el = panelCenterStackRef.value;
+  if (!el) return Math.min(0.82, Math.max(0.45, ratio));
+  const usable = Math.max(1, el.clientHeight - CENTER_SPLIT_HANDLE_HEIGHT);
+  const minRatio = Math.min(0.9, CENTER_SPLIT_MIN_MAIN / usable);
+  const maxRatio = Math.max(0.2, 1 - CENTER_SPLIT_MIN_DEBUG / usable);
+  return Math.min(maxRatio, Math.max(minRatio, ratio));
+}
+
+function updateCenterSplitByClientY(clientY: number): void {
+  const el = panelCenterStackRef.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const usable = Math.max(1, rect.height - CENTER_SPLIT_HANDLE_HEIGHT);
+  const rawTop = clientY - rect.top;
+  const minTop = Math.min(CENTER_SPLIT_MIN_MAIN, usable - 1);
+  const maxTop = Math.max(minTop, usable - CENTER_SPLIT_MIN_DEBUG);
+  const top = Math.min(maxTop, Math.max(minTop, rawTop));
+  centerSplitRatio.value = clampCenterSplitRatio(top / usable);
+}
+
+function onCenterSplitPointerMove(event: PointerEvent): void {
+  if (!draggingCenterSplit) return;
+  if (activeCenterSplitPointerId !== null && event.pointerId !== activeCenterSplitPointerId) return;
+  event.preventDefault();
+  updateCenterSplitByClientY(event.clientY);
+}
+
+function onCenterSplitPointerUp(event?: PointerEvent): void {
+  if (!draggingCenterSplit) return;
+  if (event && activeCenterSplitPointerId !== null && event.pointerId !== activeCenterSplitPointerId) return;
+  draggingCenterSplit = false;
+  activeCenterSplitPointerId = null;
+  window.removeEventListener('pointermove', onCenterSplitPointerMove);
+  window.removeEventListener('pointerup', onCenterSplitPointerUp);
+  window.removeEventListener('pointercancel', onCenterSplitPointerUp);
+}
+
+function onCenterSplitPointerDown(event: PointerEvent): void {
+  event.preventDefault();
+  activeCenterSplitPointerId = event.pointerId;
+  draggingCenterSplit = true;
+  updateCenterSplitByClientY(event.clientY);
+  window.addEventListener('pointermove', onCenterSplitPointerMove, { passive: false });
+  window.addEventListener('pointerup', onCenterSplitPointerUp);
+  window.addEventListener('pointercancel', onCenterSplitPointerUp);
+}
+
+const panelCenterMainStyle = computed(() => ({
+  flexBasis: `${Math.round(clampCenterSplitRatio(centerSplitRatio.value) * 100)}%`,
+}));
+
+const panelCenterDebugStyle = computed(() => ({
+  flexBasis: `${Math.round((1 - clampCenterSplitRatio(centerSplitRatio.value)) * 100)}%`,
+}));
 
 const mobileStatusText = computed(() => {
   if (runtimeStore.isRunning) return '运行中';
@@ -27,11 +97,24 @@ const mobileStatusClass = computed(() => {
   return 'mobile-runtime-chip--idle';
 });
 
+const mobileGpsDeltaText = computed(() => {
+  const delta = runtimeStore.currentGpsDeltaFromBest;
+  if (Math.abs(delta) < 0.005) return '与最佳持平';
+  return `${delta >= 0 ? '+' : ''}${delta.toFixed(2)} G/s`;
+});
+
 function switchMobilePanel(panel: MobilePanel): void {
   activeMobilePanel.value = panel;
 }
 
+function handlePageHide(): void {
+  flushGameStay();
+}
+
 onMounted(() => {
+  trackGameEnter();
+  window.addEventListener('pagehide', handlePageHide);
+
   // 恢复建筑 / 工具 / 订单持久化状态
   flowStore.initBuildingsFromSnapshot();
   flowStore.initToolsFromSnapshot();
@@ -42,6 +125,12 @@ onMounted(() => {
   runtimeStore.start();
   orderStore.startTick(flowStore.gameConfig);
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pagehide', handlePageHide);
+  onCenterSplitPointerUp();
+  flushGameStay();
+});
 </script>
 
 <template>
@@ -51,8 +140,11 @@ onMounted(() => {
         <div class="mobile-runtime-metric">
           <span class="mobile-runtime-label">实时收益</span>
           <span class="mobile-runtime-value">
-            {{ flowStore.displayGps.toFixed(2) }}
+            {{ runtimeStore.currentStableGps.toFixed(2) }}
             <span class="mobile-runtime-unit">G/s</span>
+          </span>
+          <span class="mobile-runtime-sub">
+            本机历史最佳 {{ runtimeStore.localBestGps.toFixed(2) }} · {{ mobileGpsDeltaText }}
           </span>
         </div>
         <div class="mobile-runtime-chip" :class="mobileStatusClass">
@@ -88,7 +180,25 @@ onMounted(() => {
       class="panel panel-center"
       :class="{ 'panel-mobile-hidden': activeMobilePanel !== 'runtime' }"
     >
-      <ExecutionView />
+      <div ref="panelCenterStackRef" class="panel-center-stack">
+        <div class="panel-center-main" :style="showDebugPanel ? panelCenterMainStyle : undefined">
+          <ExecutionView />
+        </div>
+        <div
+          v-if="showDebugPanel"
+          class="panel-center-split-handle"
+          title="拖拽调整运行面板和调试面板高度"
+          @pointerdown="onCenterSplitPointerDown"
+        >
+          <span class="panel-center-split-dot"></span>
+        </div>
+        <DebugPanel
+          v-if="showDebugPanel"
+          class="panel-center-debug"
+          :style="panelCenterDebugStyle"
+          :embedded="true"
+        />
+      </div>
     </div>
     <!-- 右：状态面板 -->
     <div
@@ -131,6 +241,49 @@ onMounted(() => {
 .panel-center {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-center-stack {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-center-main {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.panel-center-split-handle {
+  height: 10px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+
+.panel-center-split-dot {
+  width: 56px;
+  height: 4px;
+  border-radius: var(--r-full);
+  background: rgba(148, 163, 184, 0.45);
+  box-shadow: 0 0 0 1px rgba(51, 65, 85, 0.5) inset;
+}
+
+.panel-center-split-handle:hover .panel-center-split-dot {
+  background: rgba(99, 102, 241, 0.6);
+}
+
+.panel-center-debug {
+  min-height: 0;
+  overflow: auto;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
 }
 
 .panel-right {
@@ -144,6 +297,7 @@ onMounted(() => {
 @media (max-width: 900px) {
   .app-layout {
     flex-direction: column;
+    overscroll-behavior: none;
   }
 
   .mobile-panel-nav {
@@ -155,8 +309,8 @@ onMounted(() => {
     grid-template-areas:
       'bar bar bar'
       'flow runtime status';
-    gap: 8px;
-    padding: calc(8px + env(safe-area-inset-top)) 12px 12px;
+    gap: 9px;
+    padding: calc(8px + env(safe-area-inset-top)) 12px 10px;
     border-bottom: 1px solid var(--border);
     background: rgba(11, 15, 25, 0.94);
     backdrop-filter: blur(10px);
@@ -169,7 +323,7 @@ onMounted(() => {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 10px 12px;
+    padding: 9px 11px;
     border: 1px solid rgba(51, 65, 85, 0.72);
     border-radius: var(--r-lg);
     background: rgba(15, 23, 42, 0.96);
@@ -198,6 +352,12 @@ onMounted(() => {
     font-family: monospace;
     color: var(--amber);
     text-shadow: 0 0 18px rgba(251, 191, 36, 0.22);
+  }
+
+  .mobile-runtime-sub {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
   }
 
   .mobile-runtime-unit {
@@ -250,13 +410,14 @@ onMounted(() => {
   }
 
   .mobile-panel-tab {
-    min-height: 40px;
+    min-height: 44px;
     border: 1px solid var(--border);
     border-radius: var(--r-full);
     background: var(--bg-card-50);
     color: var(--text-muted);
     font-size: 13px;
     font-weight: 700;
+    touch-action: manipulation;
   }
 
   .mobile-panel-tab--active {
@@ -273,6 +434,8 @@ onMounted(() => {
     height: auto;
     flex: 1;
     overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .panel-left,
@@ -288,7 +451,7 @@ onMounted(() => {
 
 @media (max-width: 520px) {
   .mobile-runtime-bar {
-    padding: 9px 10px;
+    padding: 8px 10px;
     gap: 10px;
   }
 

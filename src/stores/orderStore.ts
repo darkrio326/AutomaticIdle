@@ -2,6 +2,8 @@ import { defineStore } from 'pinia';
 import type { ActiveOrder, OrderTemplate, GameConfig } from '@/core/types';
 import type { OrderSlotSnapshot } from '@/services/saveService';
 import orderTemplatesData from '@/config/ordersTemplate.json';
+import { buildOrderGuidance, getBiasedTemplateWeight, type OrderContext } from '@/core/orderGuidance';
+import { useFlowStore } from './flowStore';
 
 const SLOT_COUNT = 3;
 const SUBMIT_COOLDOWN_MS = 10_000;   // 10s after submit
@@ -20,14 +22,46 @@ function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function weightedRandom(templates: OrderTemplate[]): OrderTemplate {
-  const total = templates.reduce((s, t) => s + t.weight, 0);
+function weightedRandom(
+  templates: Array<{ template: OrderTemplate; weight: number }>,
+): OrderTemplate {
+  const total = templates.reduce((s, item) => s + item.weight, 0);
   let r = Math.random() * total;
-  for (const t of templates) {
-    r -= t.weight;
-    if (r <= 0) return t;
+  for (const item of templates) {
+    r -= item.weight;
+    if (r <= 0) return item.template;
   }
-  return templates[templates.length - 1];
+  return templates[templates.length - 1].template;
+}
+
+function buildOrderContext(gameConfig: GameConfig): OrderContext {
+  const flowStore = useFlowStore();
+  const enabledRecipes = Object.values(gameConfig.recipes).filter((recipe) => recipe.enabled !== false);
+  const flowOutputIds = new Set<string>();
+
+  for (const step of flowStore.steps) {
+    const recipe = gameConfig.recipes[step.recipeId];
+    if (!recipe) continue;
+    for (const output of recipe.outputs) {
+      flowOutputIds.add(output.resourceId);
+    }
+  }
+
+  return {
+    inventory: flowStore.playerState.inventory,
+    flowOutputIds,
+    enabledRecipes,
+  };
+}
+
+function pickTemplate(templates: OrderTemplate[], gameConfig: GameConfig): OrderTemplate {
+  const context = buildOrderContext(gameConfig);
+  return weightedRandom(
+    templates.map((template) => ({
+      template,
+      weight: getBiasedTemplateWeight(template, context),
+    })),
+  );
 }
 
 function generateOrder(
@@ -131,9 +165,25 @@ export const useOrderStore = defineStore('order', {
         cooldownEndsAt: s.cooldownEndsAt,
       }));
     },
+
+    getOrderGuidance(): (order: ActiveOrder, gameConfig: GameConfig) => ReturnType<typeof buildOrderGuidance> {
+      return (order: ActiveOrder, gameConfig: GameConfig) => {
+        const templates = orderTemplatesData as OrderTemplate[];
+        const template = templates.find((item) => item.id === order.templateId);
+        return buildOrderGuidance(order, gameConfig, buildOrderContext(gameConfig), template);
+      };
+    },
   },
 
   actions: {
+    resetSlots(): void {
+      this.slots = Array.from({ length: SLOT_COUNT }, (_, i): SlotState => ({
+        slotIndex: i,
+        order: null,
+        cooldownEndsAt: null,
+      }));
+    },
+
     tick(gameConfig: GameConfig): void {
       const now = Date.now();
       const templates = orderTemplatesData as OrderTemplate[];
@@ -154,7 +204,7 @@ export const useOrderStore = defineStore('order', {
         }
         // Fill empty slots
         if (slot.order === null && slot.cooldownEndsAt === null) {
-          const template = weightedRandom(templates);
+          const template = pickTemplate(templates, gameConfig);
           slot.order = generateOrder(template, gameConfig, now);
         }
       }
@@ -192,7 +242,7 @@ export const useOrderStore = defineStore('order', {
       if (!slot) return;
       const now = Date.now();
       const templates = orderTemplatesData as OrderTemplate[];
-      const template = weightedRandom(templates);
+      const template = pickTemplate(templates, gameConfig);
       slot.order = generateOrder(template, gameConfig, now);
       slot.cooldownEndsAt = null;
     },

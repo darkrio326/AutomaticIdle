@@ -15,6 +15,7 @@
 import type { GameConfig, RecipeConfig } from "./types";
 import type { RuntimeState } from "./runtimeTypes";
 import { applyExpGains } from "./expSystem";
+import { calcBuildingMaintenancePerSecond } from "./economy";
 
 // ─── GPS 静态计算 ───────────────────────────────────────────────────────────────
 
@@ -78,7 +79,9 @@ function calcActualStepTime(
     }
   }
 
-  return Math.max(0.1, recipe.timeSeconds * skillMultiplier * toolMultiplier);
+  const globalEfficiencyMultiplier = 1 + Math.max(0, state.totalTechPoints) * 0.02;
+  const adjustedTime = (recipe.timeSeconds * skillMultiplier * toolMultiplier) / globalEfficiencyMultiplier;
+  return Math.max(0.1, adjustedTime);
 }
 
 // ─── 单步动作执行器（ITER-016 / ITER-017）────────────────────────────────────
@@ -174,7 +177,35 @@ function calcStaticGps(state: RuntimeState, config: GameConfig): number {
       }
     }
   }
-  return totalTimeS > 0 ? totalGold / totalTimeS : 0;
+  const grossGps = totalTimeS > 0 ? totalGold / totalTimeS : 0;
+  const maintenancePerSecond = calcBuildingMaintenancePerSecond(state.purchasedBuildingIds, config);
+  state.maintenancePerSecond = maintenancePerSecond;
+  return grossGps - maintenancePerSecond;
+}
+
+function applyMaintenanceCost(
+  state: RuntimeState,
+  deltaMs: number,
+  config: GameConfig,
+): boolean {
+  const maintenancePerSecond = calcBuildingMaintenancePerSecond(state.purchasedBuildingIds, config);
+  state.maintenancePerSecond = maintenancePerSecond;
+  if (maintenancePerSecond <= 0 || deltaMs <= 0) return true;
+
+  const goldCost = (maintenancePerSecond * deltaMs) / 1000;
+  const currentGold = state.playerState.inventory.gold ?? 0;
+  if (currentGold + 1e-9 < goldCost) {
+    state.playerState.inventory.gold = 0;
+    state.status = "idle";
+    state.lastTickAt = 0;
+    state.stepProgress = 0;
+    state.repeatProgress = 0;
+    state.lastStopReason = "维护费不足：金币已耗尽，流程已停机。";
+    return false;
+  }
+
+  state.playerState.inventory.gold = Math.max(0, currentGold - goldCost);
+  return true;
 }
 
 // ─── 步骤推进器（ITER-016）────────────────────────────────────────────────────
@@ -214,6 +245,7 @@ function advanceStep(
       state.lastTickAt = 0;
       state.stepProgress = 0;
       state.repeatProgress = 0;
+      state.lastStopReason = "资源不足：当前步骤缺少输入资源，流程已停机。";
       break;
     }
 
@@ -313,6 +345,7 @@ export class RuntimeEngine {
   start(): void {
     if (this._state.status === "running") return;
     this._state.status = "running";
+    this._state.lastStopReason = "";
     this._state.lastTickAt = performance.now();
     this._scheduleRaf();
   }
@@ -328,6 +361,7 @@ export class RuntimeEngine {
   resume(): void {
     if (this._state.status !== "paused") return;
     this._state.status = "running";
+    this._state.lastStopReason = "";
     // 重置 lastTickAt 避免恢复时补算暂停期间的 deltaTime
     this._state.lastTickAt = performance.now();
     this._scheduleRaf();
@@ -340,6 +374,40 @@ export class RuntimeEngine {
     this._state.lastTickAt = 0;
     this._state.stepProgress = 0;
     this._state.repeatProgress = 0;
+    this._state.lastStopReason = "";
+  }
+
+  /**
+   * 调试单步推进：在非 running 状态下推进当前步骤的一次 repeat。
+   * 用于 DebugPanel 的单步验证，不启动 rAF 循环。
+   */
+  stepOnce(): boolean {
+    if (this._state.status === "running") return false;
+    if (this._state.activeFlow == null || this._state.activeFlow.steps.length === 0) {
+      return false;
+    }
+
+    const step = this._state.activeFlow.steps[this._state.stepIndex];
+    if (step == null) return false;
+    const recipe = this._config.recipes[step.recipeId];
+    if (recipe == null) return false;
+
+    if (this._state.status === "idle") {
+      this._state.status = "paused";
+      this._state.lastStopReason = "";
+    }
+
+    const repeatTimeMs = calcActualStepTime(recipe, this._state, this._config) * 1000;
+    const remainingMs = Math.max(1, repeatTimeMs - this._state.stepProgress);
+
+    if (!applyMaintenanceCost(this._state, remainingMs, this._config)) {
+      this._state.gps = calcStaticGps(this._state, this._config);
+      return true;
+    }
+
+    advanceStep(this._state, remainingMs, this._config);
+    this._state.gps = calcStaticGps(this._state, this._config);
+    return true;
   }
 
   /** 当前引擎状态快照（只读引用，外部不应直接修改） */
@@ -371,6 +439,12 @@ export class RuntimeEngine {
 
     // 步骤推进与资源/EXP 结算
     if (deltaMs > 0) {
+      if (!applyMaintenanceCost(this._state, deltaMs, this._config)) {
+        this._state.gps = calcStaticGps(this._state, this._config);
+        this._onTick?.(this._state);
+        return;
+      }
+
       advanceStep(this._state, deltaMs, this._config);
 
       // GPS 静态公式（总流程金币 / 总流程耗时）

@@ -1,11 +1,18 @@
 <script setup lang="ts">
+import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { trackLandingView, trackStartGameClick } from '@/services/analyticsService';
 
 const router = useRouter();
 
 function startGame(): void {
+  trackStartGameClick();
   router.push('/play');
 }
+
+onMounted(() => {
+  trackLandingView();
+});
 
 const PARTICLES = [
   { icon: '⛏️', left: 7,  delay: 0,   dur: 9  },

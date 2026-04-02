@@ -62,6 +62,7 @@ export interface OrderTemplate {
   id: string;
   rarity: 'common' | 'uncommon' | 'rare';
   weight: number;
+  highValue?: boolean;
   titlePool?: string[];
   requirementPool: Array<{ resourceId: string; min: number; max: number }>;
   rewardPool: Array<{ resourceId: string; min: number; max: number }>;
@@ -88,6 +89,7 @@ export interface BuildingConfig {
   name: string;
   cost: Record<string, number>;
   unlock: BuildingUnlock;
+  maintenanceGoldPerSecond?: number;
 }
 
 export interface ToolEffect {

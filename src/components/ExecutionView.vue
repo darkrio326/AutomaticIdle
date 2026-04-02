@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { useRoute } from 'vue-router';
-import { clearSaveSnapshot } from '@/services/saveService';
-import { useFlowStore } from '@/stores/flowStore';
+import { computed, ref } from 'vue';
+import { calcDisplayRecipeTimeSeconds, useFlowStore } from '@/stores/flowStore';
 import { useRuntimeStore } from '@/stores/runtimeStore';
 
 const flowStore = useFlowStore();
 const runtimeStore = useRuntimeStore();
-const route = useRoute();
+const showBoostedTime = ref(false);
 
 type ExecViewMode = 'active' | 'empty' | 'standby';
 
@@ -15,12 +13,17 @@ interface ExecViewSnapshot {
   mode: ExecViewMode;
   statusLabel: 'running' | 'paused' | 'idle';
   gps: string;
+  sessionBestGps: string;
+  localBestGps: string;
+  bestStableGps: string;
+  deltaFromBest: number;
   stepIndex: number;
   stepCount: number;
   repeatCurrent: number;
   repeatTotal: number;
   recipeName: string;
   recipeTime: number;
+  recipeBoostedTime: number;
   inputs: Array<{ resourceId: string; amount: number }>;
   outputs: Array<{ resourceId: string; amount: number }>;
   stepProgress: number;
@@ -47,22 +50,31 @@ function buildLiveSnapshot(): ExecViewSnapshot {
 
   const step = steps[runtimeStore.stepIndex];
   const recipe = step ? flowStore.gameConfig.recipes[step.recipeId] : null;
+  const recipeTime = recipe?.timeSeconds ?? 0;
+  const recipeBoostedTime = recipe
+    ? calcDisplayRecipeTimeSeconds(recipe, flowStore.playerState, flowStore.gameConfig)
+    : 0;
 
   return {
     mode,
     statusLabel,
-    gps: flowStore.displayGps.toFixed(2),
+    gps: runtimeStore.currentStableGps.toFixed(2),
+    sessionBestGps: runtimeStore.sessionBestGps.toFixed(2),
+    localBestGps: runtimeStore.localBestGps.toFixed(2),
+    bestStableGps: runtimeStore.bestStableGps.toFixed(2),
+    deltaFromBest: runtimeStore.currentGpsDeltaFromBest,
     stepIndex: runtimeStore.stepIndex,
     stepCount,
     repeatCurrent: runtimeStore.repeatProgress + 1,
     repeatTotal: step?.repeat ?? 1,
     recipeName: recipe?.name ?? '—',
-    recipeTime: recipe?.timeSeconds ?? 0,
+    recipeTime,
+    recipeBoostedTime,
     inputs: recipe?.inputs?.map((x) => ({ ...x })) ?? [],
     outputs: recipe?.outputs?.map((x) => ({ ...x })) ?? [],
     stepProgress: Math.round(runtimeStore.stepProgressRatio * 100),
     loopCount: runtimeStore.loopCount,
-    isFast: (recipe?.timeSeconds ?? 1) < 1,
+    isFast: recipeBoostedTime < 1,
   };
 }
 
@@ -70,26 +82,24 @@ const viewState = computed(() => {
   return buildLiveSnapshot();
 });
 
-const showDebugTools = computed(() => route.query.debug === '1');
-
-function onClearSave(): void {
-  clearSaveSnapshot();
-  window.location.reload();
-}
-
-function onToggleGlobalPause(): void {
-  if (runtimeStore.isRunning) {
-    runtimeStore.pause();
-    return;
-  }
-  if (runtimeStore.isPaused) {
-    runtimeStore.resume();
-  }
-}
-
 function formatResourceAmount(resourceId: string, amount: number): string {
   const name = flowStore.gameConfig.resources[resourceId]?.name ?? resourceId;
   return `${name} x ${amount}`;
+}
+
+function formatDelta(value: number): string {
+  if (Math.abs(value) < 0.005) return '+0.00';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
+}
+
+function formatSeconds(seconds: number): string {
+  const rounded = Math.round(seconds);
+  if (Math.abs(seconds - rounded) <= 0.005) return `${rounded}`;
+  return seconds.toFixed(2);
+}
+
+function toggleBoostedTime(): void {
+  showBoostedTime.value = !showBoostedTime.value;
 }
 </script>
 
@@ -109,6 +119,14 @@ function formatResourceAmount(resourceId: string, amount: number): string {
           <div class="gps-value">
             <span class="gps-number">{{ viewState.gps }}</span>
             <span class="gps-unit">G/s</span>
+          </div>
+          <div class="gps-history">
+            <span class="gps-history-item">本次会话峰值 {{ viewState.sessionBestGps }}</span>
+            <span class="gps-history-item">本机历史最佳 {{ viewState.localBestGps }}</span>
+            <span class="gps-history-item">当前轮次最佳 {{ viewState.bestStableGps }}</span>
+            <span class="gps-history-item" :class="{ 'is-positive': viewState.deltaFromBest >= 0, 'is-negative': viewState.deltaFromBest < 0 }">
+              与最佳差值 {{ formatDelta(viewState.deltaFromBest) }}
+            </span>
           </div>
         </div>
         <div class="status-block">
@@ -135,7 +153,14 @@ function formatResourceAmount(resourceId: string, amount: number): string {
 
           <div class="exec-card">
             <div class="exec-step-name">{{ viewState.recipeName }}</div>
-            <div class="exec-step-time">{{ viewState.recipeTime }}s / 次</div>
+            <button class="exec-step-time" type="button" @click="toggleBoostedTime">
+              <template v-if="showBoostedTime">
+                加成后 {{ formatSeconds(viewState.recipeBoostedTime) }}s / 次
+              </template>
+              <template v-else>
+                {{ formatSeconds(viewState.recipeTime) }}s / 次
+              </template>
+            </button>
 
             <div class="exec-io">
               <div v-if="viewState.inputs.length > 0" class="io-line io-input">
@@ -209,20 +234,6 @@ function formatResourceAmount(resourceId: string, amount: number): string {
         <div v-else-if="viewState.statusLabel === 'paused'" class="status-pause">
           ⏸ 已暂停
         </div>
-      </div>
-
-      <!-- Debug 行 -->
-      <div v-if="showDebugTools" class="debug-row">
-        <span class="debug-label">debug</span>
-        <button
-          class="debug-btn debug-btn-freeze"
-          :class="{ 'is-active': runtimeStore.isPaused }"
-          :disabled="!runtimeStore.isRunning && !runtimeStore.isPaused"
-          @click="onToggleGlobalPause"
-        >
-          {{ runtimeStore.isPaused ? '整体继续' : '整体暂停' }}
-        </button>
-        <button class="debug-btn" @click="onClearSave">清空存档</button>
       </div>
     </div>
   </div>
@@ -322,6 +333,30 @@ function formatResourceAmount(resourceId: string, amount: number): string {
   font-weight: 500;
 }
 
+.gps-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.gps-history-item {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border-50);
+  border-radius: var(--r-full);
+  padding: 4px 8px;
+}
+
+.gps-history-item.is-positive {
+  color: var(--emerald);
+}
+
+.gps-history-item.is-negative {
+  color: var(--red);
+}
+
 .status-block {
   display: flex;
   align-items: center;
@@ -413,11 +448,21 @@ function formatResourceAmount(resourceId: string, amount: number): string {
 }
 
 .exec-step-time {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  margin: 0 auto 12px;
   text-align: center;
   font-size: 12px;
   font-family: monospace;
   color: var(--text-dim);
-  margin-bottom: 12px;
+}
+
+.exec-step-time:hover {
+  color: var(--amber);
 }
 
 .exec-io {
@@ -597,61 +642,9 @@ function formatResourceAmount(resourceId: string, amount: number): string {
   padding: 6px 18px;
 }
 
-.debug-row {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-}
-
-.debug-label {
-  font-size: 11px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.debug-btn {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--red);
-  background: var(--red-bg);
-  border: 1px solid rgba(248, 113, 113, 0.32);
-  border-radius: var(--r-sm);
-  padding: 6px 10px;
-}
-
-.debug-btn:hover {
-  background: rgba(248, 113, 113, 0.24);
-}
-
-.debug-btn-freeze {
-  color: var(--amber);
-  background: var(--amber-bg);
-  border-color: rgba(251, 191, 36, 0.32);
-}
-
-.debug-btn-freeze:hover {
-  background: rgba(251, 191, 36, 0.24);
-}
-
-.debug-btn-freeze.is-active {
-  color: var(--emerald);
-  background: var(--emerald-bg);
-  border-color: rgba(52, 211, 153, 0.32);
-}
-
-.debug-btn-freeze:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
 @media (max-width: 900px) {
   .exec-inner {
-    padding: 16px 14px calc(16px + env(safe-area-inset-bottom));
+    padding: 14px 12px calc(16px + env(safe-area-inset-bottom));
   }
 
   .exec-header {
@@ -664,28 +657,25 @@ function formatResourceAmount(resourceId: string, amount: number): string {
 
   .exec-card {
     max-width: none;
-    padding: 22px 18px 18px;
+    padding: 20px 16px 16px;
+    border-radius: var(--r-lg);
   }
 
   .exec-step-name {
     font-size: 24px;
   }
 
-  .exec-footer,
-  .debug-row {
+  .exec-footer {
     flex-wrap: wrap;
-  }
-
-  .debug-label {
-    width: 100%;
-    text-align: center;
+    gap: 10px;
+    padding-top: 12px;
   }
 }
 
 @media (max-width: 520px) {
   .exec-inner {
-    padding-left: 12px;
-    padding-right: 12px;
+    padding-left: 10px;
+    padding-right: 10px;
   }
 
   .gps-number {
@@ -697,13 +687,17 @@ function formatResourceAmount(resourceId: string, amount: number): string {
   .exec-badge,
   .loop-badge,
   .status-ok,
-  .status-pause,
-  .debug-btn {
+  .status-pause {
     font-size: 11px;
   }
 
   .exec-step-name {
-    font-size: 20px;
+    font-size: 18px;
+    line-height: 1.15;
+  }
+
+  .exec-step-time {
+    font-size: 11px;
   }
 
   .io-line {

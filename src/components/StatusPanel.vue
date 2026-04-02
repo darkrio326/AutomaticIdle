@@ -4,6 +4,13 @@ import { useFlowStore } from '@/stores/flowStore';
 import { useRuntimeStore } from '@/stores/runtimeStore';
 import { useOrderStore } from '@/stores/orderStore';
 import { useBuildingStore } from '@/stores/buildingStore';
+import {
+  loadSaveSnapshot,
+  saveSnapshot,
+  exportSaveTransferString,
+  parseSaveTransferString,
+} from '@/services/saveService';
+import { trackPrestigeConfirm } from '@/services/analyticsService';
 import type { ActiveOrder } from '@/core/types';
 import BuildingPanel from './BuildingPanel.vue';
 import ToolPanel from './ToolPanel.vue';
@@ -14,6 +21,14 @@ const orderStore = useOrderStore();
 const buildingStore = useBuildingStore();
 
 const ordersExpanded = ref(true);
+const skillsExpanded = ref(true);
+const toolsExpanded = ref(true);
+const buildingsExpanded = ref(true);
+const prestigeExpanded = ref(true);
+const saveTransferExpanded = ref(false);
+const saveTransferText = ref('');
+const saveTransferMessage = ref('');
+const saveTransferMessageIsSuccess = ref(true);
 const expandedSkillIds = ref<string[]>([]);
 
 /** 订单时钟刷新 */
@@ -30,6 +45,16 @@ const activeOrderCount = computed(() =>
   slotInfos.value.filter((s) => s.status === 'active').length
 );
 
+const slotGuidances = computed(() =>
+  slotInfos.value.map((slot) => {
+    if (!slot.order) return null;
+    return orderStore.getOrderGuidance(slot.order, flowStore.gameConfig);
+  }),
+);
+
+const toolCount = computed(() => Object.keys(flowStore.gameConfig.tools ?? {}).length);
+const buildingCount = computed(() => Object.keys(flowStore.gameConfig.buildings ?? {}).length);
+
 const orderMessage = computed(() => {
   const msg = flowStore.errorMessage || '';
   return msg.startsWith('订单') ? msg : '';
@@ -39,6 +64,17 @@ const orderMessageIsSuccess = computed(() => {
   const msg = orderMessage.value;
   return msg.includes('成功') || msg.includes('完成');
 });
+
+const prestigeMessage = computed(() => {
+  const msg = flowStore.errorMessage || '';
+  return msg.startsWith('重开') ? msg : '';
+});
+
+const prestigeMessageIsSuccess = computed(() => prestigeMessage.value.includes('成功'));
+
+const showEconomySummary = computed(() =>
+  runtimeStore.currentMaintenancePerSecond > 0 || Boolean(runtimeStore.economyWarningText),
+);
 
 function canSubmitOrder(order: ActiveOrder): boolean {
   for (const req of order.requirements) {
@@ -154,7 +190,7 @@ const displayInventory = computed(() => {
     // 金币在运行中直接复用引擎 GPS，确保与中间「实时收益」一致。
     effectiveRate:
       id === 'gold' && isRuntimeActive
-        ? flowStore.displayGps
+        ? runtimeStore.currentStableGps
         : (flowRateMap.value.rates[id] ?? 0),
     id,
     name: flowStore.gameConfig.resources[id]?.name ?? id,
@@ -177,6 +213,18 @@ function formatRate(rate: number): string {
   return `${sign}${Math.abs(rate).toFixed(2)}/s`;
 }
 
+function formatInventoryAmount(resourceId: string, amount: number): string {
+  if (resourceId === 'gold') {
+    // 维护费按秒连续扣减会产生小数，金币库存展示统一按整数口径避免抖动。
+    return Math.floor(Math.max(0, amount)).toLocaleString();
+  }
+  const rounded = Math.round(amount);
+  if (Math.abs(amount - rounded) <= 0.0001) {
+    return rounded.toLocaleString();
+  }
+  return amount.toFixed(2);
+}
+
 function formatResources(items: Array<{ resourceId: string; amount: number }>): string {
   if (!items || items.length === 0) return '无';
   return items.map((x) => {
@@ -195,6 +243,65 @@ function toggleSkill(skillId: string): void {
 
 function isSkillExpanded(skillId: string): boolean {
   return expandedSkillIds.value.includes(skillId);
+}
+
+function onPrestigeReset(): void {
+  const gain = runtimeStore.techPointGain;
+  if (gain <= 0) return;
+  const confirmed = window.confirm(
+    `确认重开本轮进度？\n将获得 +${gain} 技术点。\n建筑、工具、库存与流程会重置，但总技术点会保留。`,
+  );
+  if (!confirmed) return;
+  trackPrestigeConfirm(gain);
+  runtimeStore.prestigeReset();
+}
+
+async function onExportSaveString(): Promise<void> {
+  flowStore.persistState();
+  const snapshot = loadSaveSnapshot();
+  if (!snapshot) {
+    saveTransferMessage.value = '导出失败：当前没有可用存档。';
+    saveTransferMessageIsSuccess.value = false;
+    return;
+  }
+
+  const transfer = exportSaveTransferString(snapshot);
+  saveTransferText.value = transfer;
+
+  try {
+    await navigator.clipboard.writeText(transfer);
+    saveTransferMessage.value = '导出成功：已生成并复制存档字符串。';
+    saveTransferMessageIsSuccess.value = true;
+  } catch {
+    saveTransferMessage.value = '导出成功：已生成存档字符串（复制失败，请手动复制）。';
+    saveTransferMessageIsSuccess.value = true;
+  }
+}
+
+function onImportSaveString(): void {
+  const parsed = parseSaveTransferString(saveTransferText.value);
+  if (!parsed.ok || !parsed.snapshot) {
+    saveTransferMessage.value = `导入失败：${parsed.reason ?? '未知错误'}`;
+    saveTransferMessageIsSuccess.value = false;
+    return;
+  }
+
+  const snapshot = parsed.snapshot;
+  const confirmed = window.confirm(
+    `即将覆盖当前本地进度。\n\n导入存档：${snapshot.flowName || '未命名流程'}\n最后保存：${new Date(snapshot.lastSavedAt).toLocaleString()}\n\n确认继续导入？`,
+  );
+  if (!confirmed) {
+    saveTransferMessage.value = '已取消导入。';
+    saveTransferMessageIsSuccess.value = false;
+    return;
+  }
+
+  saveSnapshot(snapshot);
+  saveTransferMessage.value = '导入成功：页面即将刷新并加载新存档。';
+  saveTransferMessageIsSuccess.value = true;
+  window.setTimeout(() => {
+    window.location.reload();
+  }, 400);
 }
 </script>
 
@@ -216,7 +323,7 @@ function isSkillExpanded(skillId: string): boolean {
         >
           <div class="inv-name">{{ res.name }}</div>
           <div class="inv-amount-row">
-            <div class="inv-amount">{{ res.amount.toLocaleString() }}</div>
+            <div class="inv-amount">{{ formatInventoryAmount(res.id, res.amount) }}</div>
             <div
               v-if="res.showRate"
               class="inv-rate"
@@ -227,15 +334,117 @@ function isSkillExpanded(skillId: string): boolean {
           </div>
         </div>
       </div>
+      <div v-if="showEconomySummary" class="economy-card">
+        <div class="economy-row">
+          <span class="economy-label">运行净收益</span>
+          <span class="economy-value" :class="{ 'economy-value-negative': runtimeStore.currentStableGps < 0, 'economy-value-positive': runtimeStore.currentStableGps > 0 }">
+            {{ formatRate(runtimeStore.currentStableGps) }}
+          </span>
+        </div>
+        <div class="economy-row">
+          <span class="economy-label">建筑维护费</span>
+          <span class="economy-value economy-value-negative">{{ formatRate(-runtimeStore.currentMaintenancePerSecond) }}</span>
+        </div>
+        <div v-if="runtimeStore.economyWarningText" class="economy-warning">
+          {{ runtimeStore.economyWarningText }}
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 订单任务 ── -->
+    <section class="panel-section">
+      <div class="section-header section-header-toggle" @click="ordersExpanded = !ordersExpanded">
+        <span class="section-icon">📋</span>
+        <h3 class="section-title">订单</h3>
+        <span class="section-count">{{ activeOrderCount }} 进行中</span>
+        <span class="toggle-arrow" :class="{ expanded: ordersExpanded }">›</span>
+      </div>
+      <div v-if="ordersExpanded" class="orders-list">
+        <div v-for="(slot, slotIndex) in slotInfos" :key="slotIndex" class="order-slot">
+          <!-- 冷却中 -->
+          <div v-if="slot.status === 'cooldown'" class="order-slot-wait">
+            <span class="slot-wait-icon">⏳</span>
+            <span class="slot-wait-text">下个订单 {{ formatTime(slot.cooldownRemainMs ?? 0) }}</span>
+          </div>
+          <!-- 空插槽 / 生成中 -->
+          <div v-else-if="slot.status === 'empty'" class="order-slot-wait">
+            <span class="slot-wait-icon">…</span>
+            <span class="slot-wait-text">生成新订单中</span>
+          </div>
+          <!-- 已过期 -->
+          <div v-else-if="slot.status === 'expired' && slot.order" class="order-card order-expired">
+            <div class="order-header">
+              <span class="order-name">{{ slot.order.name }}</span>
+              <span class="order-rarity" :class="'rarity-' + slot.order.rarity">{{ rarityLabel(slot.order.rarity) }}</span>
+            </div>
+            <div class="order-row"><span class="order-label">订单已过期</span></div>
+            <div class="order-actions">
+              <button class="btn-order-discard" @click="flowStore.deleteOrder(slot.order.instanceId)">删除 -10🪙</button>
+            </div>
+          </div>
+          <!-- 活跃订单 -->
+          <div v-else-if="slot.status === 'active' && slot.order" class="order-card">
+            <div class="order-header">
+              <span class="order-name">{{ slot.order.name }}</span>
+              <div class="order-badges">
+                <span v-if="slotGuidances[slotIndex]?.isHighValue" class="order-value-badge">
+                  {{ slotGuidances[slotIndex]?.valueLabel }}
+                </span>
+                <span class="order-rarity" :class="'rarity-' + slot.order.rarity">{{ rarityLabel(slot.order.rarity) }}</span>
+              </div>
+            </div>
+            <div class="order-row">
+              <span class="order-label">需求:</span>
+              <span class="order-val">{{ formatResources(slot.order.requirements) }}</span>
+            </div>
+            <div class="order-row">
+              <span class="order-label">奖励:</span>
+              <span class="order-val order-reward">{{ formatResources(slot.order.rewards) }}</span>
+            </div>
+            <div class="order-row">
+              <span class="order-label">剩余:</span>
+              <span
+                class="order-val"
+                :class="{ 'order-expiring': slot.order.expiresAt - now < 60_000 }"
+              >{{ formatTime(slot.order.expiresAt - now) }}</span>
+            </div>
+            <div
+              v-if="slotGuidances[slotIndex]"
+              class="order-guide"
+              :class="`order-guide-${slotGuidances[slotIndex]?.tone}`"
+            >
+              {{ slotGuidances[slotIndex]?.text }}
+            </div>
+            <div class="order-actions">
+              <button
+                class="btn-order"
+                :disabled="!canSubmitOrder(slot.order)"
+                @click="flowStore.submitOrder(slot.order.instanceId)"
+              >提交</button>
+              <button class="btn-order-refresh" @click="flowStore.refreshOrder(slot.order.instanceId)">刷新 -25🪙</button>
+              <button class="btn-order-discard" @click="flowStore.deleteOrder(slot.order.instanceId)">丢弃 -10🪙</button>
+            </div>
+          </div>
+        </div>
+        <div
+          v-if="orderMessage"
+          class="panel-message"
+          :class="{ 'panel-message-success': orderMessageIsSuccess, 'panel-message-error': !orderMessageIsSuccess }"
+        >
+          {{ orderMessage }}
+        </div>
+      </div>
     </section>
 
     <!-- ── 技能经验 ── -->
     <section class="panel-section">
-      <div class="section-header">
+      <div class="section-header section-header-toggle" @click="skillsExpanded = !skillsExpanded">
         <span class="section-icon">✦</span>
-        <h3 class="section-title">技能成长</h3>
+        <h3 class="section-title">技能</h3>
+        <span class="section-count">{{ flowStore.skillItems.length }} 项</span>
+        <span class="toggle-arrow" :class="{ expanded: skillsExpanded }">›</span>
       </div>
-      <div class="skills-list">
+      <div v-if="skillsExpanded" class="skills-list">
         <button
           v-for="skill in flowStore.skillItems"
           :key="skill.id"
@@ -288,83 +497,95 @@ function isSkillExpanded(skillId: string): boolean {
       </div>
     </section>
 
-    <!-- ── 建筑系统 ── -->
-    <BuildingPanel />
-
     <!-- ── 工具系统 ── -->
-    <ToolPanel />
-
-    <!-- ── 订单任务 ── -->
     <section class="panel-section">
-      <div class="section-header orders-toggle" @click="ordersExpanded = !ordersExpanded">
-        <span class="section-icon">📋</span>
-        <h3 class="section-title">订单任务</h3>
-        <span class="orders-count">{{ activeOrderCount }} 进行中</span>
-        <span class="toggle-arrow" :class="{ expanded: ordersExpanded }">›</span>
+      <div class="section-header section-header-toggle" @click="toolsExpanded = !toolsExpanded">
+        <span class="section-icon">🔧</span>
+        <h3 class="section-title">工具</h3>
+        <span class="section-count">{{ toolCount }} 项</span>
+        <span class="toggle-arrow" :class="{ expanded: toolsExpanded }">›</span>
       </div>
-      <div v-if="ordersExpanded" class="orders-list">
-        <div v-for="(slot, slotIndex) in slotInfos" :key="slotIndex" class="order-slot">
-          <!-- 冷却中 -->
-          <div v-if="slot.status === 'cooldown'" class="order-slot-wait">
-            <span class="slot-wait-icon">⏳</span>
-            <span class="slot-wait-text">下个订单 {{ formatTime(slot.cooldownRemainMs ?? 0) }}</span>
+      <ToolPanel v-if="toolsExpanded" :embedded="true" />
+    </section>
+
+    <!-- ── 建筑系统 ── -->
+    <section class="panel-section">
+      <div class="section-header section-header-toggle" @click="buildingsExpanded = !buildingsExpanded">
+        <span class="section-icon">🏛️</span>
+        <h3 class="section-title">建筑</h3>
+        <span class="section-count">{{ buildingCount }} 项</span>
+        <span class="toggle-arrow" :class="{ expanded: buildingsExpanded }">›</span>
+      </div>
+      <BuildingPanel v-if="buildingsExpanded" :embedded="true" />
+    </section>
+
+    <!-- ── 再来一轮（Prestige） ── -->
+    <section class="panel-section">
+      <div class="section-header section-header-toggle" @click="prestigeExpanded = !prestigeExpanded">
+        <span class="section-icon">⟳</span>
+        <h3 class="section-title">再来一轮</h3>
+        <span class="section-count">+{{ runtimeStore.techPointGain }} 技术点</span>
+        <span class="toggle-arrow" :class="{ expanded: prestigeExpanded }">›</span>
+      </div>
+
+      <template v-if="prestigeExpanded">
+        <div class="prestige-card">
+          <div class="prestige-preview">
+            当前可获得：<strong>+{{ runtimeStore.techPointGain }}</strong> 技术点
           </div>
-          <!-- 空插槽 / 生成中 -->
-          <div v-else-if="slot.status === 'empty'" class="order-slot-wait">
-            <span class="slot-wait-icon">…</span>
-            <span class="slot-wait-text">生成新订单中</span>
+          <div class="prestige-preview">
+            当前总技术点：<strong>{{ runtimeStore.totalTechPoints }}</strong>
           </div>
-          <!-- 已过期 -->
-          <div v-else-if="slot.status === 'expired' && slot.order" class="order-card order-expired">
-            <div class="order-header">
-              <span class="order-name">{{ slot.order.name }}</span>
-              <span class="order-rarity" :class="'rarity-' + slot.order.rarity">{{ rarityLabel(slot.order.rarity) }}</span>
-            </div>
-            <div class="order-row"><span class="order-label">订单已过期</span></div>
-            <div class="order-actions">
-              <button class="btn-order-discard" @click="flowStore.deleteOrder(slot.order.instanceId)">删除 -10🪙</button>
-            </div>
+          <div class="prestige-preview">
+            重开后全局效率：<strong>+{{ runtimeStore.previewEfficiencyPercent.toFixed(0) }}%</strong>
           </div>
-          <!-- 活跃订单 -->
-          <div v-else-if="slot.status === 'active' && slot.order" class="order-card">
-            <div class="order-header">
-              <span class="order-name">{{ slot.order.name }}</span>
-              <span class="order-rarity" :class="'rarity-' + slot.order.rarity">{{ rarityLabel(slot.order.rarity) }}</span>
-            </div>
-            <div class="order-row">
-              <span class="order-label">需求:</span>
-              <span class="order-val">{{ formatResources(slot.order.requirements) }}</span>
-            </div>
-            <div class="order-row">
-              <span class="order-label">奖励:</span>
-              <span class="order-val order-reward">{{ formatResources(slot.order.rewards) }}</span>
-            </div>
-            <div class="order-row">
-              <span class="order-label">剩余:</span>
-              <span
-                class="order-val"
-                :class="{ 'order-expiring': slot.order.expiresAt - now < 60_000 }"
-              >{{ formatTime(slot.order.expiresAt - now) }}</span>
-            </div>
-            <div class="order-actions">
-              <button
-                class="btn-order"
-                :disabled="!canSubmitOrder(slot.order)"
-                @click="flowStore.submitOrder(slot.order.instanceId)"
-              >提交</button>
-              <button class="btn-order-refresh" @click="flowStore.refreshOrder(slot.order.instanceId)">刷新 -25🪙</button>
-              <button class="btn-order-discard" @click="flowStore.deleteOrder(slot.order.instanceId)">丢弃 -10🪙</button>
-            </div>
+
+          <button
+            class="btn-prestige"
+            :disabled="runtimeStore.techPointGain <= 0"
+            @click="onPrestigeReset"
+          >
+            重开本轮（保留技术点）
+          </button>
+
+          <div class="prestige-note">
+            当前全局效率加成：+{{ runtimeStore.globalEfficiencyPercent.toFixed(0) }}%
           </div>
         </div>
+
         <div
-          v-if="orderMessage"
+          v-if="prestigeMessage"
           class="panel-message"
-          :class="{ 'panel-message-success': orderMessageIsSuccess, 'panel-message-error': !orderMessageIsSuccess }"
+          :class="{ 'panel-message-success': prestigeMessageIsSuccess, 'panel-message-error': !prestigeMessageIsSuccess }"
         >
-          {{ orderMessage }}
+          {{ prestigeMessage }}
         </div>
-      </div>
+
+        <div class="save-transfer-block">
+          <div class="save-transfer-head" @click="saveTransferExpanded = !saveTransferExpanded">
+            <span class="save-transfer-title">存档导入导出</span>
+            <span class="toggle-arrow" :class="{ expanded: saveTransferExpanded }">›</span>
+          </div>
+          <div v-if="saveTransferExpanded" class="save-transfer-body">
+            <textarea
+              v-model="saveTransferText"
+              class="save-transfer-input"
+              placeholder="点击“导出存档字符串”生成，或粘贴字符串后点击“导入并覆盖”"
+            ></textarea>
+            <div class="save-transfer-actions">
+              <button class="btn-save-transfer" @click="onExportSaveString">导出存档字符串</button>
+              <button class="btn-save-transfer btn-save-transfer-danger" @click="onImportSaveString">导入并覆盖</button>
+            </div>
+            <div
+              v-if="saveTransferMessage"
+              class="panel-message"
+              :class="{ 'panel-message-success': saveTransferMessageIsSuccess, 'panel-message-error': !saveTransferMessageIsSuccess }"
+            >
+              {{ saveTransferMessage }}
+            </div>
+          </div>
+        </div>
+      </template>
     </section>
 
   </div>
@@ -411,6 +632,22 @@ function isSkillExpanded(skillId: string): boolean {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-dim);
+}
+
+.section-header-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-header-toggle:hover .section-title,
+.section-header-toggle:hover .section-count {
+  color: var(--text-muted);
+}
+
+.section-count {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-left: auto;
 }
 
 /* ── 库存网格 ── */
@@ -480,7 +717,117 @@ function isSkillExpanded(skillId: string): boolean {
   color: var(--amber);
 }
 
+.economy-card {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(251, 191, 36, 0.18);
+  background: rgba(120, 53, 15, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.economy-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.economy-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.economy-value {
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text);
+}
+
+.economy-value-positive {
+  color: var(--emerald);
+}
+
+.economy-value-negative {
+  color: var(--red);
+}
+
+.economy-warning {
+  font-size: 11px;
+  color: #fcd34d;
+  border-top: 1px solid rgba(251, 191, 36, 0.14);
+  padding-top: 6px;
+}
+
 @media (max-width: 1260px) {
+  .inv-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .status-panel {
+    padding: 12px;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .panel-section {
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+  }
+
+  .section-header {
+    margin-bottom: 8px;
+  }
+
+  .inv-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .inv-card {
+    padding: 9px 10px;
+    border-radius: var(--r-md);
+  }
+
+  .inv-name {
+    font-size: 10px;
+  }
+
+  .inv-amount {
+    font-size: clamp(15px, 4.8vw, 20px);
+  }
+
+  .inv-rate {
+    font-size: 10px;
+  }
+
+  .economy-card {
+    margin-top: 8px;
+    padding: 9px 10px;
+  }
+
+  .order-card,
+  .order-slot-wait,
+  .skill-card,
+  .prestige-card {
+    border-radius: var(--r-md);
+  }
+
+  .btn-order,
+  .btn-order-refresh,
+  .btn-order-discard,
+  .btn-prestige,
+  .btn-save-transfer {
+    min-height: 36px;
+  }
+}
+
+@media (max-width: 480px) {
   .inv-grid {
     grid-template-columns: 1fr;
   }
@@ -671,23 +1018,113 @@ function isSkillExpanded(skillId: string): boolean {
   color: var(--text-dim);
 }
 
-/* ── 升级 ── */
-/* ── 订单 ── */
-.orders-toggle {
-  cursor: pointer;
-  margin-bottom: 8px;
-  user-select: none;
+.prestige-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.orders-toggle:hover .section-title {
+.prestige-preview {
+  font-size: 12px;
   color: var(--text-muted);
 }
 
-.orders-count {
-  font-size: 10px;
-  color: var(--text-dim);
-  margin-left: auto;
+.prestige-preview strong {
+  color: var(--text);
 }
+
+.btn-prestige {
+  margin-top: 2px;
+  min-height: 34px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: var(--r-sm);
+}
+
+.btn-prestige:disabled {
+  color: var(--text-dim);
+  border-color: var(--border-50);
+  background: var(--bg-card-50);
+}
+
+.prestige-note {
+  font-size: 11px;
+  color: var(--emerald);
+}
+
+.save-transfer-block {
+  margin-top: 6px;
+  border-top: 1px solid var(--border-50);
+  padding-top: 8px;
+}
+
+.save-transfer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+.save-transfer-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.save-transfer-body {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.save-transfer-input {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-50);
+  background: var(--bg-card-50);
+  color: var(--text-muted);
+  padding: 8px;
+  font-size: 11px;
+  font-family: monospace;
+}
+
+.save-transfer-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-save-transfer {
+  flex: 1;
+  min-height: 32px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.btn-save-transfer-danger {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.1);
+  color: #fca5a5;
+}
+
+/* ── 升级 ── */
+/* ── 订单 ── */
 
 .toggle-arrow {
   font-size: 16px;
@@ -808,6 +1245,14 @@ function isSkillExpanded(skillId: string): boolean {
   margin-bottom: 6px;
 }
 
+.order-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .order-rarity {
   font-size: 9px;
   font-weight: 700;
@@ -821,9 +1266,48 @@ function isSkillExpanded(skillId: string): boolean {
 .rarity-uncommon { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); }
 .rarity-rare { background: rgba(168, 85, 247, 0.15); color: #c4b5fd; border: 1px solid rgba(168,85,247,0.3); }
 
+.order-value-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(251, 191, 36, 0.14);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  letter-spacing: 0.03em;
+}
+
 .order-reward { color: var(--emerald); }
 
 .order-expiring { color: var(--red); font-weight: 700; }
+
+.order-guide {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.order-guide-ready {
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--emerald);
+}
+
+.order-guide-flow {
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+}
+
+.order-guide-suggestion {
+  background: rgba(59, 130, 246, 0.1);
+  color: #93c5fd;
+}
+
+.order-guide-locked {
+  background: rgba(248, 113, 113, 0.12);
+  color: #fca5a5;
+}
 
 .order-expired { opacity: 0.6; border-color: rgba(239,68,68,0.3); }
 

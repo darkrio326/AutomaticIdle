@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import type { RecipeConfig } from '@/core/types';
-import { useFlowStore } from '@/stores/flowStore';
+import { calcDisplayRecipeTimeSeconds, useFlowStore } from '@/stores/flowStore';
 import { useRuntimeStore } from '@/stores/runtimeStore';
 import { useFlowTemplateStore } from '@/stores/flowTemplateStore';
 
@@ -19,6 +19,7 @@ onMounted(() => {
 const showSaveInput = ref(false);
 const newTemplateName = ref('');
 const selectedTemplateId = ref('');
+const boostedTimeByStepUid = ref<Record<number, boolean>>({});
 
 // ── 编辑区上下分栏（步骤区 / 添加步骤区） ──
 const editorMainRef = ref<HTMLElement | null>(null);
@@ -139,6 +140,29 @@ function getRecipeName(recipeId: string): string {
 
 function getRecipeTime(recipeId: string): number {
   return flowStore.gameConfig.recipes[recipeId]?.timeSeconds ?? 0;
+}
+
+function getBoostedRecipeTime(recipeId: string): number {
+  const recipe = flowStore.gameConfig.recipes[recipeId];
+  if (!recipe) return 0;
+  return calcDisplayRecipeTimeSeconds(recipe, flowStore.playerState, flowStore.gameConfig);
+}
+
+function formatSeconds(seconds: number): string {
+  const rounded = Math.round(seconds);
+  if (Math.abs(seconds - rounded) <= 0.005) return `${rounded}`;
+  return seconds.toFixed(2);
+}
+
+function toggleStepTimeMode(uid: number): void {
+  boostedTimeByStepUid.value = {
+    ...boostedTimeByStepUid.value,
+    [uid]: !boostedTimeByStepUid.value[uid],
+  };
+}
+
+function isBoostedTimeMode(uid: number): boolean {
+  return Boolean(boostedTimeByStepUid.value[uid]);
 }
 
 function getRecipeCategory(recipeId: string): string {
@@ -304,7 +328,14 @@ onUnmounted(() => {
               <span class="recipe-badge" :class="`cat-${getRecipeCategory(step.recipeId)}`">
                 {{ getRecipeName(step.recipeId) }}
               </span>
-              <span class="step-time">{{ getRecipeTime(step.recipeId) }}s</span>
+              <button class="step-time" type="button" @click="toggleStepTimeMode(step.uid)">
+                <template v-if="isBoostedTimeMode(step.uid)">
+                  加成后 {{ formatSeconds(getBoostedRecipeTime(step.recipeId)) }}s/次
+                </template>
+                <template v-else>
+                  {{ formatSeconds(getRecipeTime(step.recipeId)) }}s/次
+                </template>
+              </button>
             </div>
             <div class="step-actions">
               <button class="btn-icon btn-danger" @click="onRemoveStep(step.uid)" title="删除">✕</button>
@@ -622,9 +653,17 @@ onUnmounted(() => {
 .cat-sell   { background: var(--yellow-bg);       color: var(--yellow); }
 
 .step-time {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
   font-size: 11px;
   color: var(--text-dim);
   white-space: nowrap;
+}
+
+.step-time:hover {
+  color: var(--amber);
 }
 
 .step-actions {

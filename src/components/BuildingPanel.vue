@@ -5,11 +5,15 @@ import { useBuildingStore } from '@/stores/buildingStore';
 
 const flowStore = useFlowStore();
 const buildingStore = useBuildingStore();
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), {
+  embedded: false,
+});
 
 interface BuildingItem {
   id: string;
   name: string;
   cost: Record<string, number>;
+  maintenanceGoldPerSecond: number;
   isPurchased: boolean;
   canPurchase: boolean;
   reason?: string;
@@ -38,6 +42,7 @@ const buildingItems = computed((): BuildingItem[] => {
       id: buildingId,
       name: buildingConfig.name,
       cost: buildingConfig.cost,
+      maintenanceGoldPerSecond: Math.max(0, buildingConfig.maintenanceGoldPerSecond ?? 0),
       isPurchased,
       canPurchase: check.canBuy && !isPurchased,
       reason: check.reason,
@@ -72,8 +77,8 @@ function handlePurchaseBuilding(buildingId: string): void {
 </script>
 
 <template>
-  <section class="panel-section">
-    <div class="section-header">
+  <div :class="props.embedded ? 'panel-body' : 'panel-section'">
+    <div v-if="!props.embedded" class="section-header">
       <span class="section-icon">🏛️</span>
       <h3 class="section-title">建筑系统</h3>
     </div>
@@ -91,6 +96,10 @@ function handlePurchaseBuilding(buildingId: string): void {
 
         <div class="building-cost">
           {{ formatCost(building.cost) }}
+        </div>
+
+        <div v-if="building.maintenanceGoldPerSecond > 0" class="building-maintenance">
+          维护费:<span class="building-maintenance-amount">{{ building.maintenanceGoldPerSecond.toFixed(2) }} G/s</span>
         </div>
 
         <!-- 解锁信息 -->
@@ -131,7 +140,7 @@ function handlePurchaseBuilding(buildingId: string): void {
     >
       {{ buildingMessage }}
     </div>
-  </section>
+  </div>
 </template>
 
 <style scoped>
@@ -139,6 +148,11 @@ function handlePurchaseBuilding(buildingId: string): void {
   border-bottom: 1px solid var(--border);
   padding-bottom: 16px;
   margin-bottom: 16px;
+}
+
+.panel-body {
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-section:last-child {
@@ -223,6 +237,17 @@ function handlePurchaseBuilding(buildingId: string): void {
   font-size: 11px;
   color: var(--text-secondary);
   margin-bottom: 6px;
+}
+
+.building-maintenance {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.building-maintenance-amount {
+  color: var(--red);
+  font-weight: 700;
 }
 
 .building-unlocks {

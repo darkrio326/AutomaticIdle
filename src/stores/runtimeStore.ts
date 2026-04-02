@@ -20,15 +20,32 @@ import { RuntimeEngine } from "@/core/runtimeEngine";
 import { createInitialRuntimeState } from "@/core/runtimeTypes";
 import type { RuntimeState, RuntimeStatus } from "@/core/runtimeTypes";
 import type { FlowDefinition } from "@/core/types";
+import { loadSaveSnapshot } from "@/services/saveService";
+import { trackResourceBlocked, trackRunStart } from "@/services/analyticsService";
+import { calcBuildingMaintenancePerSecond } from "@/core/economy";
 import { clonePlayerState, getFlowValidationError } from "@/stores/flowStore";
 import { useFlowStore } from "./flowStore";
 import { useToolStore } from "./toolStore";
+import { useBuildingStore } from "./buildingStore";
 
 /** 每隔多少帧将 playerState 回写到 flowStore（降低持久化频率）*/
 const SYNC_BACK_EVERY_MS = 2_000;
 
 // engine 实例挂载到模块级（不放 Pinia state，避免响应式代理破坏类实例）
 let _engine: RuntimeEngine | null = null;
+
+function getInitialHistoryState(): { bestStableGps: number; localBestGps: number } {
+  const snapshot = loadSaveSnapshot();
+  return {
+    bestStableGps: Math.max(0, snapshot?.bestStableGps ?? 0),
+    localBestGps: Math.max(0, snapshot?.localBestGps ?? 0),
+  };
+}
+
+function getInitialTechPoints(): number {
+  const snapshot = loadSaveSnapshot();
+  return Math.max(0, snapshot?.totalTechPoints ?? 0);
+}
 
 function getEngine(): RuntimeEngine {
   if (_engine == null) {
@@ -38,7 +55,10 @@ function getEngine(): RuntimeEngine {
 }
 
 export const useRuntimeStore = defineStore("runtime", {
-  state: () => ({
+  state: () => {
+    const historyState = getInitialHistoryState();
+
+    return ({
     /** 引擎运行状态（镜像 engine.state.status）*/
     status: "idle" as RuntimeStatus,
     /** 当前执行步骤的索引 */
@@ -53,6 +73,18 @@ export const useRuntimeStore = defineStore("runtime", {
     loopCount: 0,
     /** 实时 GPS（静态公式：总流程金币 / 总流程耗时） */
     gps: 0,
+    /** 当前会话内历史最高稳定收益（刷新后重置） */
+    sessionBestGps: 0,
+    /** 当前轮次历史最高稳定收益（持久化，用于后续 Prestige） */
+    bestStableGps: historyState.bestStableGps,
+    /** 本地历史最佳稳定收益（持久化） */
+    localBestGps: historyState.localBestGps,
+    /** 累计技术点（跨轮次） */
+    totalTechPoints: getInitialTechPoints(),
+    /** 当前建筑维护费（金币 / 秒） */
+    maintenancePerSecond: 0,
+    /** 最近一次自动停机原因 */
+    lastStopReason: '',
     /** 实时库存快照（每帧从 engine playerState 投影，不触发持久化）*/
     liveInventory: {} as Record<string, number>,
     /** 当前活跃流程 */
@@ -61,7 +93,8 @@ export const useRuntimeStore = defineStore("runtime", {
     hasPendingFlow: false,
     /** 上次同步回 flowStore 的时间戳（ms） */
     _lastSyncMs: 0,
-  }),
+    });
+  },
 
   getters: {
     isRunning(state): boolean {
@@ -69,6 +102,81 @@ export const useRuntimeStore = defineStore("runtime", {
     },
     isPaused(state): boolean {
       return state.status === "paused";
+    },
+    canStepOnce(state): boolean {
+      return state.status !== "running" && state.activeFlow != null && state.activeFlow.steps.length > 0;
+    },
+    currentStableGps(state): number {
+      const flowStore = useFlowStore();
+      return state.status === "running" || state.status === "paused"
+        ? state.gps
+        : flowStore.displayGps;
+    },
+    currentMaintenancePerSecond(state): number {
+      const flowStore = useFlowStore();
+      return state.status === "running" || state.status === "paused"
+        ? state.maintenancePerSecond
+        : flowStore.displayMaintenancePerSecond;
+    },
+    currentGoldBalance(state): number {
+      const flowStore = useFlowStore();
+      const inventory = state.status === "running" || state.status === "paused"
+        ? state.liveInventory
+        : flowStore.playerState.inventory;
+      return Math.max(0, inventory.gold ?? 0);
+    },
+    currentGpsDeltaFromBest(state): number {
+      const flowStore = useFlowStore();
+      const currentGps = state.status === "running" || state.status === "paused"
+        ? state.gps
+        : flowStore.displayGps;
+      return currentGps - state.localBestGps;
+    },
+    hasNegativeIncome(): boolean {
+      return this.currentMaintenancePerSecond > 0 && this.currentStableGps < 0;
+    },
+    lowBalanceSeconds(): number {
+      if (this.currentMaintenancePerSecond <= 0) return 0;
+      return Math.floor(this.currentGoldBalance / this.currentMaintenancePerSecond);
+    },
+    isLowBalanceWarning(): boolean {
+      return this.currentMaintenancePerSecond > 0
+        && this.currentGoldBalance > 0
+        && this.lowBalanceSeconds <= 30;
+    },
+    economyWarningText(state): string {
+      if (state.lastStopReason) return state.lastStopReason;
+      if (this.hasNegativeIncome) {
+        const secondsLeft = this.currentStableGps < 0
+          ? Math.floor(this.currentGoldBalance / Math.abs(this.currentStableGps))
+          : 0;
+        if (secondsLeft > 0) {
+          return `当前净收益为负，按现有金币约 ${secondsLeft} 秒后会见底。`;
+        }
+        return '当前净收益为负，金币会持续下降。';
+      }
+      if (this.isLowBalanceWarning) {
+        return `金币余额偏低，按当前维护费约可再支撑 ${this.lowBalanceSeconds} 秒。`;
+      }
+      return '';
+    },
+    techPointGain(state): number {
+      return Math.floor(6 * Math.log2(state.bestStableGps / 5 + 1));
+    },
+    previewTotalTechPoints(state): number {
+      return state.totalTechPoints + this.techPointGain;
+    },
+    globalEfficiencyMultiplier(state): number {
+      return 1 + state.totalTechPoints * 0.02;
+    },
+    previewEfficiencyMultiplier(state): number {
+      return 1 + this.previewTotalTechPoints * 0.02;
+    },
+    globalEfficiencyPercent(): number {
+      return this.totalTechPoints * 2;
+    },
+    previewEfficiencyPercent(): number {
+      return this.previewTotalTechPoints * 2;
     },
     /** 当前步骤进度 0~1（用于进度条） */
     stepProgressRatio(state): number {
@@ -85,6 +193,7 @@ export const useRuntimeStore = defineStore("runtime", {
     initEngine(): void {
       const flowStore = useFlowStore();
       const toolStore = useToolStore();
+      const buildingStore = useBuildingStore();
 
       const initialState = createInitialRuntimeState(
         clonePlayerState(flowStore.playerState)
@@ -93,6 +202,12 @@ export const useRuntimeStore = defineStore("runtime", {
         JSON.stringify(flowStore.flowDefinition)
       );
       initialState.toolLevels = { ...toolStore.toolLevels };
+      initialState.totalTechPoints = this.totalTechPoints;
+      initialState.purchasedBuildingIds = [...buildingStore.getPurchasedBuildingIds];
+      initialState.maintenancePerSecond = calcBuildingMaintenancePerSecond(
+        initialState.purchasedBuildingIds,
+        flowStore.gameConfig,
+      );
 
       _engine = new RuntimeEngine(initialState, flowStore.gameConfig);
 
@@ -120,6 +235,8 @@ export const useRuntimeStore = defineStore("runtime", {
       this._syncFlowToEngine();
       getEngine().start();
       this.status = "running";
+      trackRunStart();
+      this._syncGpsHistory(flowStore.displayGps);
     },
 
     /** 暂停（保留接口，当前 UI 不暴露） */
@@ -211,24 +328,102 @@ export const useRuntimeStore = defineStore("runtime", {
       if (_engine == null) return;
       const flowStore = useFlowStore();
       const toolStore = useToolStore();
+      const buildingStore = useBuildingStore();
       const engineState = getEngine().state as RuntimeState;
       (engineState as RuntimeState).playerState = clonePlayerState(flowStore.playerState);
       (engineState as RuntimeState).toolLevels = { ...toolStore.toolLevels };
+      (engineState as RuntimeState).totalTechPoints = this.totalTechPoints;
+      (engineState as RuntimeState).purchasedBuildingIds = [...buildingStore.getPurchasedBuildingIds];
+      (engineState as RuntimeState).maintenancePerSecond = calcBuildingMaintenancePerSecond(
+        buildingStore.getPurchasedBuildingIds,
+        flowStore.gameConfig,
+      );
       this.liveInventory = { ...engineState.playerState.inventory };
+    },
+
+    /** DebugPanel 单步推进当前步骤的一次 repeat。 */
+    stepOnce(): void {
+      if (_engine == null) return;
+      const advanced = getEngine().stepOnce();
+      if (!advanced) return;
+
+      const state = getEngine().state as RuntimeState;
+      this._onEngineTick(state);
+      this._syncPlayerStateBack(state);
+    },
+
+    _syncGpsHistory(currentGps: number): void {
+      const normalizedGps = Number.isFinite(currentGps) ? Math.max(0, currentGps) : 0;
+      if (normalizedGps <= 0) return;
+
+      let didChange = false;
+
+      if (normalizedGps > this.sessionBestGps) {
+        this.sessionBestGps = normalizedGps;
+      }
+      if (normalizedGps > this.bestStableGps) {
+        this.bestStableGps = normalizedGps;
+        didChange = true;
+      }
+      if (normalizedGps > this.localBestGps) {
+        this.localBestGps = normalizedGps;
+        didChange = true;
+      }
+
+      if (didChange) {
+        const flowStore = useFlowStore();
+        flowStore.persistState();
+      }
+    },
+
+    prestigeReset(): { success: boolean; gained: number } {
+      const flowStore = useFlowStore();
+      const gain = this.techPointGain;
+      if (gain <= 0) {
+        flowStore.errorMessage = '重开失败：当前轮次历史最佳收益不足，无法获得技术点。';
+        return { success: false, gained: 0 };
+      }
+
+      this.stop();
+      this.totalTechPoints += gain;
+      this.sessionBestGps = 0;
+      this.bestStableGps = 0;
+      this.lastStopReason = '';
+
+      flowStore.resetProgressForPrestige();
+      this.syncPlayerStateFromFlowStore();
+      this.notifyConfigChanged();
+      this.notifyFlowChanged();
+      flowStore.persistState();
+      flowStore.errorMessage = `重开成功：获得 +${gain} 技术点，当前总技术点 ${this.totalTechPoints}。`;
+
+      return { success: true, gained: gain };
     },
 
     // ── 私有方法 ──────────────────────────────────────────────────────────────
 
     /** 每帧回调：将 engine state 投影到 Pinia 响应式字段 */
     _onEngineTick(state: RuntimeState): void {
+      const prevStopReason = this.lastStopReason;
       this.status = state.status;
       this.stepIndex = state.stepIndex;
       this.stepProgress = state.stepProgress;
       this.repeatProgress = state.repeatProgress;
       this.loopCount = state.loopCount;
       this.gps = state.gps;
+      this.maintenancePerSecond = state.maintenancePerSecond;
+      this.lastStopReason = state.lastStopReason;
       this.activeFlow = state.activeFlow;
       this.hasPendingFlow = state.pendingFlow != null;
+
+      if (
+        state.lastStopReason.startsWith('资源不足')
+        && state.lastStopReason !== prevStopReason
+      ) {
+        trackResourceBlocked(state.lastStopReason);
+      }
+
+      this._syncGpsHistory(state.gps);
 
       // 每帧同步实时库存（仅读取，不触发持久化）
       this.liveInventory = { ...state.playerState.inventory };
@@ -248,16 +443,25 @@ export const useRuntimeStore = defineStore("runtime", {
     _syncPlayerStateBack(state: RuntimeState): void {
       const flowStore = useFlowStore();
       flowStore.playerState = clonePlayerState(state.playerState);
+      if (state.lastStopReason.startsWith('维护费不足') || state.lastStopReason.startsWith('资源不足')) {
+        flowStore.errorMessage = state.lastStopReason;
+      }
       flowStore.persistState();
     },
 
     /** 将 flowStore 的当前流程同步到 engine（start 时调用） */
     _syncFlowToEngine(): void {
       const flowStore = useFlowStore();
+      const buildingStore = useBuildingStore();
       const engine = getEngine();
       const engineState = engine.state as RuntimeState;
       // 同步 playerState（确保使用 flowStore 的最新状态，正确处理 Set 类型）
       (engineState as RuntimeState).playerState = clonePlayerState(flowStore.playerState);
+      (engineState as RuntimeState).purchasedBuildingIds = [...buildingStore.getPurchasedBuildingIds];
+      (engineState as RuntimeState).maintenancePerSecond = calcBuildingMaintenancePerSecond(
+        buildingStore.getPurchasedBuildingIds,
+        flowStore.gameConfig,
+      );
       // 同步 config
       engine.updateConfig(flowStore.gameConfig);
     },
