@@ -2,10 +2,29 @@
 import { computed, ref } from 'vue';
 import { calcDisplayRecipeTimeSeconds, useFlowStore } from '@/stores/flowStore';
 import { useRuntimeStore } from '@/stores/runtimeStore';
+import NewPlayerGuide from '@/components/NewPlayerGuide.vue';
+
+interface Props {
+  showNewPlayerGuide?: boolean;
+  guideCountdownLeft?: number | null;
+}
+
+withDefaults(defineProps<Props>(), {
+  showNewPlayerGuide: false,
+  guideCountdownLeft: null,
+});
+
+const emit = defineEmits<{
+  (e: 'acknowledge-guide'): void;
+}>();
 
 const flowStore = useFlowStore();
 const runtimeStore = useRuntimeStore();
 const showBoostedTime = ref(false);
+
+function acknowledgeGuide(): void {
+  emit('acknowledge-guide');
+}
 
 type ExecViewMode = 'active' | 'empty' | 'standby';
 
@@ -112,6 +131,14 @@ function toggleBoostedTime(): void {
     </div>
 
     <div class="exec-inner">
+      <NewPlayerGuide
+        v-if="showNewPlayerGuide"
+        mode="desktop"
+        :countdown-left="guideCountdownLeft"
+        class="exec-newbie-guide"
+        @acknowledge="acknowledgeGuide"
+      />
+
       <!-- 顶部：实时收益 + 状态 -->
       <div class="exec-header">
         <div class="gps-block">
@@ -292,6 +319,10 @@ function toggleBoostedTime(): void {
   flex-direction: column;
   height: 100%;
   padding: 24px;
+}
+
+.exec-newbie-guide {
+  flex-shrink: 0;
 }
 
 /* 顶部收益栏 */
@@ -648,6 +679,10 @@ function toggleBoostedTime(): void {
   }
 
   .exec-header {
+    display: none;
+  }
+
+  .exec-newbie-guide {
     display: none;
   }
 

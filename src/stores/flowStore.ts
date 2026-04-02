@@ -261,6 +261,7 @@ function buildInitialState() {
 
   if (!snapshot) {
     return {
+      isFreshSave: true,
       flowName: '默认流程',
       steps: [] as FlowStepItem[],
       result: null as SimulationResult | null,
@@ -345,6 +346,7 @@ function buildInitialState() {
   });
 
   return {
+    isFreshSave: false,
     flowName: snapshot.flowName || '默认流程',
     steps: safeSteps,
     result: null as SimulationResult | null,

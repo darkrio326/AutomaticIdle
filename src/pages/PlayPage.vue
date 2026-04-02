@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import DebugPanel from '@/components/DebugPanel.vue';
 import FlowEditor from '@/components/FlowEditor.vue';
 import ExecutionView from '@/components/ExecutionView.vue';
+import NewPlayerGuide from '@/components/NewPlayerGuide.vue';
 import StatusPanel from '@/components/StatusPanel.vue';
 import { useRuntimeStore } from '@/stores/runtimeStore';
 import { useFlowStore } from '@/stores/flowStore';
@@ -27,6 +28,7 @@ let activeCenterSplitPointerId: number | null = null;
 const CENTER_SPLIT_MIN_MAIN = 220;
 const CENTER_SPLIT_MIN_DEBUG = 170;
 const CENTER_SPLIT_HANDLE_HEIGHT = 10;
+const GUIDE_AUTO_HIDE_SECONDS = 3;
 
 function clampCenterSplitRatio(ratio: number): number {
   const el = panelCenterStackRef.value;
@@ -103,8 +105,80 @@ const mobileGpsDeltaText = computed(() => {
   return `${delta >= 0 ? '+' : ''}${delta.toFixed(2)} G/s`;
 });
 
+const guideDismissed = ref(false);
+const guideAutoHidden = ref(false);
+const guideCountdownLeft = ref<number | null>(null);
+let guideCountdownTimer: ReturnType<typeof setInterval> | null = null;
+
+const hasGuideRequiredFlow = computed(() => {
+  let hasGather = false;
+  let hasCraft = false;
+  let hasSell = false;
+
+  for (const step of flowStore.steps) {
+    const recipe = flowStore.gameConfig.recipes[step.recipeId];
+    if (!recipe) continue;
+    if (recipe.category === 'gather') hasGather = true;
+    if (recipe.category === 'craft') hasCraft = true;
+    if (recipe.category === 'sell') hasSell = true;
+  }
+
+  return hasGather && hasCraft && hasSell;
+});
+
+const hasGoldGrowth = computed(() => (flowStore.playerState.inventory.gold ?? 0) > 0);
+const guideCompletionReached = computed(() => hasGuideRequiredFlow.value || hasGoldGrowth.value);
+
+const showNewPlayerGuide = computed(() => {
+  if (guideDismissed.value || guideAutoHidden.value) return false;
+  if (!guideCompletionReached.value) return true;
+  return guideCountdownLeft.value != null;
+});
+
+function clearGuideCountdown(): void {
+  if (guideCountdownTimer) {
+    clearInterval(guideCountdownTimer);
+    guideCountdownTimer = null;
+  }
+}
+
+function startGuideCountdown(): void {
+  if (guideCountdownTimer || guideDismissed.value || guideAutoHidden.value) return;
+
+  guideCountdownLeft.value = GUIDE_AUTO_HIDE_SECONDS;
+  guideCountdownTimer = setInterval(() => {
+    const next = (guideCountdownLeft.value ?? 0) - 1;
+    if (next <= 0) {
+      guideCountdownLeft.value = null;
+      guideAutoHidden.value = true;
+      clearGuideCountdown();
+      return;
+    }
+    guideCountdownLeft.value = next;
+  }, 1000);
+}
+
+watch(guideCompletionReached, (reached) => {
+  if (!reached || guideDismissed.value || guideAutoHidden.value) {
+    clearGuideCountdown();
+    guideCountdownLeft.value = null;
+    return;
+  }
+  startGuideCountdown();
+}, { immediate: true });
+
 function switchMobilePanel(panel: MobilePanel): void {
   activeMobilePanel.value = panel;
+}
+
+function jumpToFlowPanel(): void {
+  switchMobilePanel('flow');
+}
+
+function dismissGuide(): void {
+  guideDismissed.value = true;
+  guideCountdownLeft.value = null;
+  clearGuideCountdown();
 }
 
 function handlePageHide(): void {
@@ -128,6 +202,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('pagehide', handlePageHide);
+  clearGuideCountdown();
   onCenterSplitPointerUp();
   flushGameStay();
 });
@@ -136,6 +211,13 @@ onBeforeUnmount(() => {
 <template>
   <div class="app-layout">
     <div class="mobile-panel-nav">
+      <NewPlayerGuide
+        v-if="showNewPlayerGuide"
+        mode="mobile"
+        :countdown-left="guideCountdownLeft"
+        @go-flow="jumpToFlowPanel"
+        @acknowledge="dismissGuide"
+      />
       <div class="mobile-runtime-bar">
         <div class="mobile-runtime-metric">
           <span class="mobile-runtime-label">实时收益</span>
@@ -182,7 +264,11 @@ onBeforeUnmount(() => {
     >
       <div ref="panelCenterStackRef" class="panel-center-stack">
         <div class="panel-center-main" :style="showDebugPanel ? panelCenterMainStyle : undefined">
-          <ExecutionView />
+          <ExecutionView
+            :show-new-player-guide="showNewPlayerGuide"
+            :guide-countdown-left="guideCountdownLeft"
+            @acknowledge-guide="dismissGuide"
+          />
         </div>
         <div
           v-if="showDebugPanel"
@@ -307,6 +393,7 @@ onBeforeUnmount(() => {
     z-index: 8;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-areas:
+      'guide guide guide'
       'bar bar bar'
       'flow runtime status';
     gap: 9px;
@@ -319,6 +406,10 @@ onBeforeUnmount(() => {
 
   .mobile-runtime-bar {
     grid-area: bar;
+      :deep(.newbie-guide--mobile) {
+        grid-area: guide;
+      }
+
     display: flex;
     align-items: center;
     justify-content: space-between;
