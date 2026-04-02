@@ -92,7 +92,7 @@ const PARTICLES = [
         开始游戏
       </button>
 
-      <p class="version-tag">v0.2 · Early Access</p>
+      <p class="version-tag">v0.3 · Early Access</p>
     </div>
   </div>
 </template>
